@@ -162,7 +162,7 @@ class _DashboardState extends State<Dashboard> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const SizedBox(height: 20),
+          const SizedBox(height: 10),
           RichText(
             text: TextSpan(
               children: [
@@ -185,75 +185,203 @@ class _DashboardState extends State<Dashboard> {
               ],
             ),
           ),
-          const SizedBox(height: 40),
-          Text(
-            'Daily Usage Limit',
-            style: TextStyle(
-              fontSize: 20,
-              color: Colors.black87,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
           const SizedBox(height: 16),
           Container(
-            padding: EdgeInsets.symmetric(horizontal: 10, vertical: 0),
+            padding: EdgeInsets.all(24),
             decoration: BoxDecoration(
-              color: Colors.grey[200],
-              borderRadius: BorderRadius.circular(15),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                _buildTimeSelector(
-                  value: _hours,
-                  maxValue: 23,
-                  label: 'h',
-                  onChanged: (value) => setState(() => _hours = value),
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.05),
+                  blurRadius: 10,
+                  spreadRadius: 0,
                 ),
-                SizedBox(width: 20),
-                _buildTimeSelector(
-                  value: _minutes,
-                  maxValue: 59,
-                  label: 'min',
-                  onChanged: (value) => setState(() => _minutes = value),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'Daily Usage Limit',
+                        style: TextStyle(
+                          fontSize: 20,
+                          color: Colors.blue[600],
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    Container(
+                      padding:
+                          EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: Colors.blue[50],
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.timer_outlined,
+                            size: 16,
+                            color: Colors.blue[600],
+                          ),
+                          SizedBox(width: 4),
+                          Text(
+                            'Set Time',
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: Colors.blue[600],
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                Container(
+                  padding: EdgeInsets.symmetric(horizontal: 10, vertical: 16),
+                  decoration: BoxDecoration(
+                    color: Colors.grey[100],
+                    borderRadius: BorderRadius.circular(15),
+                    border: Border.all(color: Colors.grey[200]!),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      _buildTimeSelector(
+                        value: _hours,
+                        maxValue: 23,
+                        label: 'h',
+                        onChanged: (value) => setState(() => _hours = value),
+                      ),
+                      SizedBox(width: 20),
+                      _buildTimeSelector(
+                        value: _minutes,
+                        maxValue: 59,
+                        label: 'min',
+                        onChanged: (value) => setState(() => _minutes = value),
+                      ),
+                    ],
+                  ),
+                ),
+                SizedBox(height: 12),
+                Center(
+                  child: GestureDetector(
+                    onTap: () => _showPremiumDialog(context),
+                    child: Container(
+                      padding:
+                          EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: Colors.blue[50],
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.lock_outline,
+                            size: 16,
+                            color: Colors.blue[600],
+                          ),
+                          SizedBox(width: 4),
+                          Text(
+                            'unlock all with premium',
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: Colors.blue[600],
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                 ),
               ],
             ),
           ),
-          const SizedBox(height: 8),
-          Center(
-            child: Text(
-              'unlock all with premium',
-              style: TextStyle(
-                fontSize: 14,
-                color: Colors.blue[600],
-                fontWeight: FontWeight.w400,
-              ),
-            ),
-          ),
-          const SizedBox(height: 30),
-          Text(
-            'Home Screen APPs',
-            style: TextStyle(
-              fontSize: 20,
-              color: Colors.black87,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
           const SizedBox(height: 16),
-          Wrap(
-            spacing: 12,
-            runSpacing: 12,
-            children: [
-              ...List.generate(5, (index) => _buildAppSelector(index)),
-              _buildAddAppButton(),
-            ],
+          Container(
+            width: double.infinity,
+            padding: EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.05),
+                  blurRadius: 10,
+                  spreadRadius: 0,
+                ),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Home Screen Apps',
+                      style: TextStyle(
+                        fontSize: 20,
+                        color: Colors.blue[600],
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    Container(
+                      padding:
+                          EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: Colors.blue[50],
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.apps_rounded,
+                            size: 16,
+                            color: Colors.blue[600],
+                          ),
+                          SizedBox(width: 4),
+                          Text(
+                            '${selectedApps.length}/5',
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: Colors.blue[600],
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                Center(
+                  child: Wrap(
+                    alignment: WrapAlignment.center,
+                    spacing: 12,
+                    runSpacing: 12,
+                    children: [
+                      ...List.generate(5, (index) => _buildAppSelector(index)),
+                      _buildAddAppButton(),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
-          const Spacer(),
-          Center(
-            child: Image.asset('assets/panda.png', height: 180),
-          ),
-          const SizedBox(height: 60),
+          const SizedBox(height: 20),
         ],
       ),
     );
@@ -300,6 +428,8 @@ class _DashboardState extends State<Dashboard> {
                   int newValue = value - step;
                   if (newValue < 0) {
                     newValue = 0;
+                  } else if (label == 'min' && newValue % 5 != 0) {
+                    newValue = (newValue ~/ 5) * 5;
                   }
                   onChanged(newValue);
                 }
@@ -1217,11 +1347,13 @@ class _DashboardState extends State<Dashboard> {
                               icon: Icon(Icons.search, color: Colors.grey[400]),
                               suffixIcon: searchController.text.isNotEmpty
                                   ? IconButton(
-                                      icon: Icon(Icons.clear, color: Colors.grey[400]),
+                                      icon: Icon(Icons.clear,
+                                          color: Colors.grey[400]),
                                       onPressed: () {
                                         searchController.clear();
                                         setState(() {
-                                          filteredContacts = List.from(contacts);
+                                          filteredContacts =
+                                              List.from(contacts);
                                         });
                                       },
                                     )
@@ -1281,7 +1413,8 @@ class _DashboardState extends State<Dashboard> {
                                   decoration: BoxDecoration(
                                     color: Colors.white,
                                     borderRadius: BorderRadius.circular(12),
-                                    border: Border.all(color: Colors.grey[200]!),
+                                    border:
+                                        Border.all(color: Colors.grey[200]!),
                                     boxShadow: [
                                       BoxShadow(
                                         color: Colors.black.withOpacity(0.02),
@@ -1304,7 +1437,8 @@ class _DashboardState extends State<Dashboard> {
                                       ),
                                       child: Center(
                                         child: Text(
-                                          (contact.displayName)[0].toUpperCase(),
+                                          (contact.displayName)[0]
+                                              .toUpperCase(),
                                           style: TextStyle(
                                             color: Colors.blue[600],
                                             fontSize: 20,
@@ -1329,7 +1463,9 @@ class _DashboardState extends State<Dashboard> {
                                       ),
                                     ),
                                     onTap: () async {
-                                      final fullContact = await FlutterContacts.getContact(contact.id);
+                                      final fullContact =
+                                          await FlutterContacts.getContact(
+                                              contact.id);
                                       if (fullContact != null) {
                                         if (!mounted) return;
                                         this.setState(() {
@@ -1354,7 +1490,8 @@ class _DashboardState extends State<Dashboard> {
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Please allow access to contacts to select emergency contact'),
+            content: Text(
+                'Please allow access to contacts to select emergency contact'),
             action: SnackBarAction(
               label: 'Settings',
               onPressed: () => openAppSettings(),
