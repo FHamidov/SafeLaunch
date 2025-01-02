@@ -31,6 +31,10 @@ class MainActivity: FlutterActivity() {
                         result.error("INVALID_PACKAGE", "Package name is null", null)
                     }
                 }
+                "openHomeSettings" -> {
+                    openHomeSettings()
+                    result.success(true)
+                }
                 else -> {
                     result.notImplemented()
                 }
@@ -110,5 +114,13 @@ class MainActivity: FlutterActivity() {
         } catch (e: Exception) {
             result.error("LAUNCH_ERROR", "Error launching app: ${e.message}", null)
         }
+    }
+
+    private fun openHomeSettings() {
+        val intent = Intent().apply {
+            action = android.provider.Settings.ACTION_HOME_SETTINGS
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK
+        }
+        startActivity(intent)
     }
 }

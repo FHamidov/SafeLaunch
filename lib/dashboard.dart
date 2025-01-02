@@ -5,6 +5,7 @@ import 'package:flutter_contacts/flutter_contacts.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:safelaunch/launcher.dart';
+import 'package:flutter/services.dart';
 
 class Dashboard extends StatefulWidget {
   const Dashboard({super.key});
@@ -26,6 +27,9 @@ class _DashboardState extends State<Dashboard> {
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
   Contact? _selectedContact;
+
+  static const platform =
+      const MethodChannel('com.example.safelaunch/app_launcher');
 
   @override
   void initState() {
@@ -915,7 +919,16 @@ class _DashboardState extends State<Dashboard> {
 
                         if (!mounted) return;
                         Navigator.pop(context);
+
+                        // Open home settings
+                        try {
+                          await platform.invokeMethod('openHomeSettings');
+                        } catch (e) {
+                          print('Error opening home settings: $e');
+                        }
+
                         // Navigate to launcher page
+                        if (!mounted) return;
                         Navigator.pushReplacement(
                           context,
                           MaterialPageRoute(
