@@ -3,6 +3,8 @@ import 'package:installed_apps/app_info.dart';
 import 'package:installed_apps/installed_apps.dart';
 import 'package:flutter_contacts/flutter_contacts.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:safelaunch/launcher.dart';
 
 class Dashboard extends StatefulWidget {
   const Dashboard({super.key});
@@ -23,7 +25,6 @@ class _DashboardState extends State<Dashboard> {
   String _confirmPassword = '';
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
-  final int _passwordLength = 4;
   Contact? _selectedContact;
 
   @override
@@ -896,10 +897,36 @@ class _DashboardState extends State<Dashboard> {
                       ),
                     ),
                     TextButton(
-                      onPressed: () {
+                      onPressed: () async {
+                        // Save preferences
+                        final prefs = await SharedPreferences.getInstance();
+                        await prefs.setBool('isSetupComplete', true);
+                        await prefs.setString('password', _password);
+                        await prefs.setInt('hours', _hours);
+                        await prefs.setInt('minutes', _minutes);
+                        await prefs.setStringList(
+                          'selectedApps',
+                          selectedApps.map((app) => app.packageName!).toList(),
+                        );
+                        if (_selectedContact != null) {
+                          await prefs.setString(
+                              'emergencyContactId', _selectedContact!.id);
+                        }
+
+                        if (!mounted) return;
                         Navigator.pop(context);
-                        // TODO: Handle password save
-                        print('Password confirmed and saved: $_password');
+                        // Navigate to launcher page
+                        Navigator.pushReplacement(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => Launcher(
+                              hours: _hours,
+                              minutes: _minutes,
+                              password: _password,
+                              emergencyContact: _selectedContact,
+                            ),
+                          ),
+                        );
                       },
                       child: Text(
                         'I Understand',
@@ -1513,5 +1540,39 @@ class _DashboardState extends State<Dashboard> {
         );
       }
     }
+  }
+
+  void _savePasswordAndProceed() async {
+    if (_password.isEmpty || _password.length < 6) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Password must be at least 6 characters')),
+      );
+      return;
+    }
+
+    if (_password != _confirmPassword) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Passwords do not match')),
+      );
+      return;
+    }
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('password', _password);
+    await prefs.setInt('hours', _hours);
+    await prefs.setInt('minutes', _minutes);
+    await prefs.setBool('isSetupComplete', true);
+
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (context) => Launcher(
+          hours: _hours,
+          minutes: _minutes,
+          password: _password,
+          emergencyContact: _selectedContact,
+        ),
+      ),
+    );
   }
 }
