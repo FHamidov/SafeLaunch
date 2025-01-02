@@ -1,0 +1,32 @@
+name: safelaunch
+description: A new Flutter project.
+
+publish_to: 'none' # Remove this line if you wish to publish to pub.dev
+
+version: 1.0.0+1
+
+environment:
+  sdk: ">=2.17.0 <3.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  installed_apps: ^1.5.2
+  google_fonts: ^5.1.0
+  flutter_contacts: ^1.1.7+1
+  permission_handler: ^11.0.1
+  cupertino_icons: ^1.0.2
+
+  # Add other dependencies here
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/giraffe.png
+    - assets/panda.png
+    - assets/gears.png
