@@ -212,6 +212,22 @@ class _LauncherState extends State<Launcher> with SingleTickerProviderStateMixin
   Future<void> _launchApp(String packageName) async {
     try {
       await platform.invokeMethod('launchApp', {'packageName': packageName});
+      // Uygulama başlatıldıktan sonra paneli kapat
+      if (_showAllApps) {
+        _slideController.animateTo(
+          0,
+          duration: Duration(milliseconds: 500),
+          curve: Curves.easeOutCubic,
+        ).then((_) {
+          if (mounted) {
+            setState(() {
+              _showAllApps = false;
+              _isDragging = false;
+              _dragOffset = 0;
+            });
+          }
+        });
+      }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Failed to launch app')),
@@ -528,16 +544,13 @@ class _LauncherState extends State<Launcher> with SingleTickerProviderStateMixin
     final delta = details.globalPosition.dy;
     final height = MediaQuery.of(context).size.height;
     
-    // Panel kapalıyken yukarıdan aşağı kaydırma için daha geniş bir alan
-    if (delta < height * 0.3 && !_showAllApps) {
+    // Ana sayfada yukarı kaydırmayı engelle
+    if (!_showAllApps) {
       return;
     }
     
     setState(() {
       _isDragging = true;
-      if (!_showAllApps) {
-        _dragOffset = height - delta;
-      }
     });
   }
 
@@ -547,15 +560,12 @@ class _LauncherState extends State<Launcher> with SingleTickerProviderStateMixin
     final delta = details.delta.dy;
     final height = MediaQuery.of(context).size.height;
     
+    // Sadece aşağı kaydırmaya izin ver
+    if (delta < 0) return;
+    
     setState(() {
       if (_showAllApps) {
         _dragOffset = (_dragOffset - delta).clamp(0.0, height);
-      } else {
-        _dragOffset = (height - details.globalPosition.dy).clamp(0.0, height);
-        // Daha az mesafe ile paneli açma
-        if (_dragOffset > height * 0.15) {
-          _showAllApps = true;
-        }
       }
     });
   }
