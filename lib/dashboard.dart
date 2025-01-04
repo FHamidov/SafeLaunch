@@ -27,6 +27,7 @@ class _DashboardState extends State<Dashboard> {
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
   Contact? _selectedContact;
+  List<String> selectedAppPackages = [];
 
   static const platform =
       const MethodChannel('com.example.safelaunch/app_launcher');
@@ -488,26 +489,19 @@ class _DashboardState extends State<Dashboard> {
 
   Future<void> _showAppPickerDialog(int index) async {
     try {
-      // Show loading indicator
       showDialog(
         context: context,
         barrierDismissible: false,
         builder: (BuildContext context) {
-          return Center(
-            child: CircularProgressIndicator(),
-          );
+          return Center(child: CircularProgressIndicator());
         },
       );
 
-      // Get apps with system apps included
       List<AppInfo> apps = await InstalledApps.getInstalledApps(true, true);
-
-      // Close loading indicator
       Navigator.pop(context);
 
       if (!mounted) return;
 
-      // Filter apps
       apps = apps
           .where((app) =>
               app.name != null &&
@@ -516,13 +510,9 @@ class _DashboardState extends State<Dashboard> {
               !app.packageName!.startsWith('com.google.android'))
           .toList();
 
-      // Sort apps
       apps.sort((a, b) => a.name!.compareTo(b.name!));
 
-      // Create a temporary list for selected apps
       List<AppInfo> tempSelectedApps = List.from(selectedApps);
-
-      // Create a filtered list for search
       List<AppInfo> filteredApps = List.from(apps);
 
       showDialog(
@@ -554,22 +544,17 @@ class _DashboardState extends State<Dashboard> {
                                   onPressed: () {
                                     this.setState(() {
                                       selectedApps = tempSelectedApps;
+                                      selectedAppPackages = selectedApps
+                                          .map((app) => app.packageName!)
+                                          .toList();
                                     });
                                     Navigator.pop(context);
                                   },
-                                  child: Text(
-                                    'Save',
-                                    style: TextStyle(
-                                      fontSize: 16,
-                                      color: Colors.blue[600],
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
+                                  child: Text('Save'),
                                 ),
                                 IconButton(
                                   onPressed: () => Navigator.pop(context),
-                                  icon: Icon(Icons.close,
-                                      color: Colors.grey[600]),
+                                  icon: Icon(Icons.close),
                                 ),
                               ],
                             ),
@@ -714,30 +699,7 @@ class _DashboardState extends State<Dashboard> {
         },
       );
     } catch (e) {
-      // Make sure to close loading indicator if there's an error
-      if (Navigator.canPop(context)) {
-        Navigator.pop(context);
-      }
-
       print('Error loading apps: $e');
-      if (mounted) {
-        showDialog(
-          context: context,
-          builder: (BuildContext context) {
-            return AlertDialog(
-              title: Text('Error'),
-              content: Text(
-                  'Failed to load installed apps. Please check app permissions and try again.'),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: Text('OK'),
-                ),
-              ],
-            );
-          },
-        );
-      }
     }
   }
 
@@ -937,6 +899,7 @@ class _DashboardState extends State<Dashboard> {
                               minutes: _minutes,
                               password: _password,
                               emergencyContact: _selectedContact,
+                              selectedAppPackages: selectedAppPackages,
                             ),
                           ),
                         );
@@ -1584,8 +1547,37 @@ class _DashboardState extends State<Dashboard> {
           minutes: _minutes,
           password: _password,
           emergencyContact: _selectedContact,
+          selectedAppPackages: selectedAppPackages,
         ),
       ),
     );
+  }
+
+  void _navigateToLauncher() {
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (context) => Launcher(
+          hours: _hours,
+          minutes: _minutes,
+          password: _password,
+          emergencyContact: _selectedContact,
+          selectedAppPackages: selectedAppPackages,
+        ),
+      ),
+    );
+  }
+
+  void _onFinishSetup() async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('isFirstTime', false);
+    await prefs.setInt('hours', _hours);
+    await prefs.setInt('minutes', _minutes);
+    await prefs.setString('password', _password);
+
+    selectedAppPackages = selectedApps.map((app) => app.packageName!).toList();
+    await prefs.setStringList('favorite_apps', selectedAppPackages);
+
+    _navigateToLauncher();
   }
 }

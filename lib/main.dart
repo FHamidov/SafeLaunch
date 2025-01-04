@@ -6,27 +6,43 @@ import 'dashboard.dart';
 import 'launcher.dart';
 
 void main() async {
+  // Ensure proper initialization
   WidgetsFlutterBinding.ensureInitialized();
+  
+  // Set system UI style
   SystemChrome.setSystemUIOverlayStyle(
-    SystemUiOverlayStyle(
+    const SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,
       statusBarIconBrightness: Brightness.dark,
     ),
   );
 
-  // Check login status
-  final prefs = await SharedPreferences.getInstance();
-  final bool isSetupComplete = prefs.getBool('isSetupComplete') ?? false;
-  final String? password = prefs.getString('password');
-  final int hours = prefs.getInt('hours') ?? 0;
-  final int minutes = prefs.getInt('minutes') ?? 30;
+  // Handle error-prone operations in try-catch block
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    final bool isSetupComplete = prefs.getBool('isSetupComplete') ?? false;
+    final String? password = prefs.getString('password');
+    final int hours = prefs.getInt('hours') ?? 0;
+    final int minutes = prefs.getInt('minutes') ?? 30;
+    final List<String> selectedApps = prefs.getStringList('favorite_apps') ?? [];
 
-  runApp(MyApp(
-    isSetupComplete: isSetupComplete,
-    password: password,
-    hours: hours,
-    minutes: minutes,
-  ));
+    runApp(MyApp(
+      isSetupComplete: isSetupComplete,
+      password: password,
+      hours: hours,
+      minutes: minutes,
+      selectedApps: selectedApps,
+    ));
+  } catch (e) {
+    // Fallback to default values if there's an error
+    runApp(const MyApp(
+      isSetupComplete: false,
+      password: null,
+      hours: 0,
+      minutes: 30,
+      selectedApps: [],
+    ));
+  }
 }
 
 class MyApp extends StatelessWidget {
@@ -34,6 +50,7 @@ class MyApp extends StatelessWidget {
   final String? password;
   final int hours;
   final int minutes;
+  final List<String> selectedApps;
 
   const MyApp({
     Key? key,
@@ -41,6 +58,7 @@ class MyApp extends StatelessWidget {
     this.password,
     required this.hours,
     required this.minutes,
+    required this.selectedApps,
   }) : super(key: key);
 
   @override
@@ -59,6 +77,7 @@ class MyApp extends StatelessWidget {
               minutes: minutes,
               password: password!,
               emergencyContact: null,
+              selectedAppPackages: selectedApps,
             )
           : const Dashboard(),
     );
@@ -168,6 +187,26 @@ class _SplashScreenState extends State<SplashScreen>
           ),
         ),
       ),
+    );
+  }
+}
+
+Future<Widget> _getInitialScreen() async {
+  SharedPreferences prefs = await SharedPreferences.getInstance();
+  bool isFirstTime = prefs.getBool('isFirstTime') ?? true;
+  int hours = prefs.getInt('hours') ?? 0;
+  int minutes = prefs.getInt('minutes') ?? 0;
+  String password = prefs.getString('password') ?? '';
+  List<String> selectedApps = prefs.getStringList('favorite_apps') ?? [];
+
+  if (isFirstTime || hours == 0 || minutes == 0 || password.isEmpty) {
+    return Dashboard();
+  } else {
+    return Launcher(
+      hours: hours,
+      minutes: minutes,
+      password: password,
+      selectedAppPackages: selectedApps,
     );
   }
 }
