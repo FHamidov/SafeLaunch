@@ -28,19 +28,23 @@ class Launcher extends StatefulWidget {
   State<Launcher> createState() => _LauncherState();
 }
 
-class _LauncherState extends State<Launcher> {
+class _LauncherState extends State<Launcher> with SingleTickerProviderStateMixin {
   static const platform = MethodChannel('com.example.safelaunch/app_launcher');
   static const String favAppsKey = 'favorite_apps';
 
   List<AppData>? _allApps;
   List<AppData> _favoriteApps = [];
-  List<AppData> _systemApps = [];
   bool _isLoading = false;
   bool _showAllApps = false;
-  bool _showSystemApps = false;
   late DateTime _currentTime;
   late Timer _timer;
   late SharedPreferences _prefs;
+  
+  // Animation controllers
+  late AnimationController _slideController;
+  late Animation<double> _slideAnimation;
+  double _dragOffset = 0;
+  bool _isDragging = false;
 
   @override
   void initState() {
@@ -52,11 +56,23 @@ class _LauncherState extends State<Launcher> {
         _currentTime = DateTime.now();
       });
     });
+
+    // Initialize animation controller with smoother duration
+    _slideController = AnimationController(
+      vsync: this,
+      duration: Duration(milliseconds: 400),
+    );
+    _slideAnimation = CurvedAnimation(
+      parent: _slideController,
+      curve: Curves.easeOutExpo,
+      reverseCurve: Curves.easeInExpo,
+    );
   }
 
   @override
   void dispose() {
     _timer.cancel();
+    _slideController.dispose();
     super.dispose();
   }
 
@@ -87,104 +103,6 @@ class _LauncherState extends State<Launcher> {
         );
       }).toList();
 
-      // Sistem uygulamalarını bul
-      final List<AppData> systemApps = [];
-
-      // Kamera uygulaması
-      final cameraApp = apps.firstWhere(
-        (app) =>
-            app.packageName.contains('com.android.camera') ||
-            app.packageName.contains('com.sec.android.app.camera') ||
-            app.packageName.contains('com.huawei.camera') ||
-            app.packageName.contains('com.google.android.GoogleCamera') ||
-            app.packageName.contains('com.oneplus.camera') ||
-            app.packageName.contains('com.motorola.camera') ||
-            app.packageName.contains('com.asus.camera') ||
-            app.packageName.contains('com.sonyericsson.android.camera') ||
-            app.name.toLowerCase().contains('camera'),
-        orElse: () => apps.first,
-      );
-      systemApps.add(cameraApp);
-
-      // Galeri uygulaması
-      final galleryApp = apps.firstWhere(
-        (app) =>
-            app.packageName.contains('com.android.gallery3d') ||
-            app.packageName.contains('com.sec.android.gallery3d') ||
-            app.packageName.contains('com.google.android.apps.photos') ||
-            app.packageName.contains('com.huawei.gallery') ||
-            app.packageName.contains('com.oneplus.gallery') ||
-            app.packageName.contains('com.motorola.gallery') ||
-            app.packageName.contains('com.asus.gallery') ||
-            app.name.toLowerCase().contains('gallery') ||
-            app.name.toLowerCase().contains('photos'),
-        orElse: () => apps[1],
-      );
-      systemApps.add(galleryApp);
-
-      // Telefon uygulaması
-      final phoneApp = apps.firstWhere(
-        (app) =>
-            app.packageName.contains('com.android.dialer') ||
-            app.packageName.contains('com.google.android.dialer') ||
-            app.packageName.contains('com.samsung.android.dialer') ||
-            app.packageName.contains('com.huawei.phoneservice') ||
-            app.packageName.contains('com.oneplus.dialer') ||
-            app.packageName.contains('com.motorola.dialer') ||
-            app.packageName.contains('com.asus.dialer') ||
-            app.name.toLowerCase().contains('phone') ||
-            app.name.toLowerCase().contains('dialer'),
-        orElse: () => apps[2],
-      );
-      systemApps.add(phoneApp);
-
-      // SMS uygulaması
-      final smsApp = apps.firstWhere(
-        (app) =>
-            app.packageName.contains('com.android.mms') ||
-            app.packageName.contains('com.google.android.apps.messaging') ||
-            app.packageName.contains('com.samsung.android.messaging') ||
-            app.packageName.contains('com.huawei.message') ||
-            app.packageName.contains('com.oneplus.message') ||
-            app.packageName.contains('com.motorola.messaging') ||
-            app.packageName.contains('com.asus.message') ||
-            app.name.toLowerCase().contains('messages') ||
-            app.name.toLowerCase().contains('messaging'),
-        orElse: () => apps[3],
-      );
-      systemApps.add(smsApp);
-
-      // Ayarlar uygulaması
-      final settingsApp = apps.firstWhere(
-        (app) =>
-            app.packageName == 'com.android.settings' ||
-            app.packageName.contains('com.sec.android.app.launcher') ||
-            app.name.toLowerCase() == 'settings',
-        orElse: () => apps[4],
-      );
-      systemApps.add(settingsApp);
-
-      // Tarayıcı uygulaması
-      final browserApp = apps.firstWhere(
-        (app) =>
-            app.packageName.contains('com.android.chrome') ||
-            app.packageName.contains('com.sec.android.app.sbrowser') ||
-            app.packageName.contains('com.huawei.browser') ||
-            app.packageName.contains('com.oneplus.browser') ||
-            app.packageName.contains('com.motorola.browser') ||
-            app.packageName.contains('com.asus.browser') ||
-            app.name.toLowerCase().contains('chrome') ||
-            app.name.toLowerCase().contains('browser'),
-        orElse: () => apps[5],
-      );
-      systemApps.add(browserApp);
-
-      // Sistem uygulamalarını hariç tut
-      final nonSystemApps = apps
-          .where((app) => !systemApps
-              .any((sysApp) => sysApp.packageName == app.packageName))
-          .toList();
-
       // SharedPreferences'dan seçili uygulamaları al
       List<String> savedPackages =
           _prefs.getStringList(favAppsKey) ?? widget.selectedAppPackages;
@@ -197,16 +115,15 @@ class _LauncherState extends State<Launcher> {
       // Seçili uygulamaları bul
       final List<AppData> selectedApps = [];
       for (String packageName in savedPackages) {
-        final app = nonSystemApps.firstWhere(
+        final app = apps.firstWhere(
           (app) => app.packageName == packageName,
-          orElse: () => nonSystemApps.first,
+          orElse: () => apps.first,
         );
         selectedApps.add(app);
       }
 
       setState(() {
-        _allApps = nonSystemApps;
-        _systemApps = systemApps;
+        _allApps = apps;
         _favoriteApps = selectedApps;
         _isLoading = false;
       });
@@ -436,274 +353,6 @@ class _LauncherState extends State<Launcher> {
     );
   }
 
-  Widget _buildSystemFolder() {
-    return LongPressDraggable<Map<String, dynamic>>(
-      data: {'type': 'folder', 'index': 0},
-      feedback: Material(
-        color: Colors.transparent,
-        child: Container(
-          width: 60,
-          height: 80,
-          child: Column(
-            children: [
-              Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  color: Colors.white12,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Stack(
-                  children: [
-                    Center(
-                      child: Icon(
-                        Icons.folder_special_rounded,
-                        color: Colors.white,
-                        size: 28,
-                      ),
-                    ),
-                    Positioned(
-                      right: 0,
-                      bottom: 0,
-                      child: Container(
-                        padding: EdgeInsets.all(4),
-                        decoration: BoxDecoration(
-                          color: Colors.white24,
-                          shape: BoxShape.circle,
-                        ),
-                        child: Text(
-                          '${_systemApps.length}',
-                          style: TextStyle(
-                            fontSize: 10,
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              SizedBox(height: 4),
-              Text(
-                'System',
-                style: TextStyle(
-                  fontSize: 11,
-                  color: Colors.white,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-      childWhenDragging: Opacity(
-        opacity: 0.5,
-        child: _buildSystemFolderContent(),
-      ),
-      child: DragTarget<Map<String, dynamic>>(
-        onWillAccept: (data) => data != null,
-        onAccept: (data) {
-          if (data['type'] == 'folder') return;
-
-          final fromIndex = data['index'] as int;
-          setState(() {
-            final app = _favoriteApps.removeAt(fromIndex);
-            _favoriteApps.insert(0, app);
-          });
-        },
-        builder: (context, candidateData, rejectedData) {
-          return GestureDetector(
-            onTap: () => _showSystemFolder(),
-            child: _buildSystemFolderContent(),
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _buildSystemFolderContent() {
-    return Column(
-      children: [
-        Container(
-          width: 48,
-          height: 48,
-          decoration: BoxDecoration(
-            color: Colors.white12,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Stack(
-            children: [
-              Center(
-                child: Icon(
-                  Icons.folder_special_rounded,
-                  color: Colors.white,
-                  size: 28,
-                ),
-              ),
-              Positioned(
-                right: 0,
-                bottom: 0,
-                child: Container(
-                  padding: EdgeInsets.all(4),
-                  decoration: BoxDecoration(
-                    color: Colors.white24,
-                    shape: BoxShape.circle,
-                  ),
-                  child: Text(
-                    '${_systemApps.length}',
-                    style: TextStyle(
-                      fontSize: 10,
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-        SizedBox(height: 4),
-        Text(
-          'System',
-          style: TextStyle(
-            fontSize: 11,
-            color: Colors.white,
-          ),
-        ),
-      ],
-    );
-  }
-
-  void _showSystemFolder() {
-    showDialog(
-      context: context,
-      barrierColor: Colors.black45,
-      builder: (BuildContext context) {
-        return BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
-          child: Dialog(
-            backgroundColor: Colors.transparent,
-            insetPadding: EdgeInsets.symmetric(horizontal: 20),
-            child: Container(
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.95),
-                borderRadius: BorderRadius.circular(28),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.2),
-                    blurRadius: 20,
-                    spreadRadius: 5,
-                  ),
-                ],
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Padding(
-                    padding: EdgeInsets.fromLTRB(24, 20, 24, 16),
-                    child: Row(
-                      children: [
-                        Container(
-                          padding: EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: Colors.blue.withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Icon(
-                            Icons.folder_special_rounded,
-                            color: Colors.blue[700],
-                            size: 24,
-                          ),
-                        ),
-                        SizedBox(width: 12),
-                        Text(
-                          'System Apps',
-                          style: TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.black87,
-                          ),
-                        ),
-                        Spacer(),
-                        IconButton(
-                          icon: Icon(Icons.close, color: Colors.black54),
-                          onPressed: () => Navigator.pop(context),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Divider(height: 1),
-                  Padding(
-                    padding: EdgeInsets.all(20),
-                    child: GridView.builder(
-                      shrinkWrap: true,
-                      physics: NeverScrollableScrollPhysics(),
-                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: 4,
-                        childAspectRatio: 0.75,
-                        crossAxisSpacing: 16,
-                        mainAxisSpacing: 20,
-                      ),
-                      itemCount: _systemApps.length,
-                      itemBuilder: (context, index) {
-                        final app = _systemApps[index];
-                        return GestureDetector(
-                          onTap: () {
-                            Navigator.pop(context);
-                            _launchApp(app.packageName);
-                          },
-                          child: Column(
-                            children: [
-                              Container(
-                                width: 56,
-                                height: 56,
-                                padding: EdgeInsets.all(4),
-                                decoration: BoxDecoration(
-                                  color: Colors.white,
-                                  borderRadius: BorderRadius.circular(16),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: Colors.black.withOpacity(0.05),
-                                      blurRadius: 8,
-                                      spreadRadius: 1,
-                                    ),
-                                  ],
-                                ),
-                                child: ClipRRect(
-                                  borderRadius: BorderRadius.circular(12),
-                                  child: Image.memory(
-                                    app.icon,
-                                    fit: BoxFit.contain,
-                                  ),
-                                ),
-                              ),
-                              SizedBox(height: 8),
-                              Text(
-                                app.name,
-                                textAlign: TextAlign.center,
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: Colors.black87,
-                                  height: 1.2,
-                                ),
-                              ),
-                            ],
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
-
   Widget _buildMainGrid() {
     return GridView.builder(
       padding: EdgeInsets.symmetric(horizontal: 16, vertical: 16),
@@ -713,253 +362,412 @@ class _LauncherState extends State<Launcher> {
         crossAxisSpacing: 16,
         mainAxisSpacing: 24,
       ),
-      itemCount: _favoriteApps.length + 1,
+      itemCount: _favoriteApps.length,
       itemBuilder: (context, index) {
-        if (index == 0) {
-          return _buildSystemFolder();
-        }
-        return _buildAppItem(_favoriteApps[index - 1], index - 1);
+        return _buildAppItem(_favoriteApps[index], index);
       },
     );
   }
 
   Widget _buildAllAppsPanel() {
-    return Positioned.fill(
-      child: Container(
-        color: Colors.white,
-        child: Column(
-          children: [
-            Container(
-              padding: EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                border: Border(
-                  bottom: BorderSide(color: Colors.grey[300]!),
-                ),
-              ),
-              child: Row(
-                children: [
-                  IconButton(
-                    icon: Icon(Icons.close),
-                    onPressed: () => setState(() => _showAllApps = false),
-                  ),
-                  SizedBox(width: 16),
-                  Text(
-                    'All Apps',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w500,
+    return AnimatedBuilder(
+      animation: _slideAnimation,
+      builder: (context, child) {
+        final height = MediaQuery.of(context).size.height;
+        final panelOffset = _isDragging 
+            ? height - _dragOffset 
+            : height * (1 - _slideAnimation.value);
+            
+        return Positioned.fill(
+          child: IgnorePointer(
+            ignoring: !_showAllApps && !_isDragging,
+            child: Stack(
+              children: [
+                // Blur background with fade
+                AnimatedOpacity(
+                  opacity: _showAllApps || _isDragging ? 1.0 : 0.0,
+                  duration: Duration(milliseconds: 200),
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                    child: Container(
+                      color: Colors.black.withOpacity(0.3),
                     ),
                   ),
-                ],
-              ),
-            ),
-            Expanded(
-              child: GridView.builder(
-                padding: EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 4,
-                  childAspectRatio: 0.8,
-                  crossAxisSpacing: 16,
-                  mainAxisSpacing: 24,
                 ),
-                itemCount: _allApps?.length ?? 0,
-                itemBuilder: (context, index) {
-                  final app = _allApps![index];
-                  return GestureDetector(
-                    onTap: () => _launchApp(app.packageName),
-                    onLongPress: () {
-                      // Favori uygulamalara ekle
-                      if (!_favoriteApps.any(
-                          (favApp) => favApp.packageName == app.packageName)) {
-                        _addToFavorites(app);
-                      } else {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                              content:
-                                  Text('This app is already in favorites')),
-                        );
-                      }
-                    },
-                    child: Column(
-                      children: [
-                        Container(
-                          width: 48,
-                          height: 48,
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Image.memory(
-                            app.icon,
-                            fit: BoxFit.contain,
-                          ),
+                // Panel
+                Positioned(
+                  top: panelOffset,
+                  left: 0,
+                  right: 0,
+                  height: height,
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
+                    child: BackdropFilter(
+                      filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+                      child: Container(
+                        color: Colors.white.withOpacity(0.1),
+                        child: Column(
+                          children: [
+                            // Handle bar
+                            Container(
+                              padding: EdgeInsets.symmetric(vertical: 12),
+                              child: Container(
+                                width: 40,
+                                height: 4,
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withOpacity(0.5),
+                                  borderRadius: BorderRadius.circular(2),
+                                ),
+                              ),
+                            ),
+                            // Header
+                            Padding(
+                              padding: EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                              child: Row(
+                                children: [
+                                  Text(
+                                    'All Apps',
+                                    style: TextStyle(
+                                      fontSize: 28,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            // Apps grid
+                            Expanded(
+                              child: GridView.builder(
+                                padding: EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                                physics: BouncingScrollPhysics(),
+                                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                                  crossAxisCount: 4,
+                                  childAspectRatio: 0.75,
+                                  crossAxisSpacing: 16,
+                                  mainAxisSpacing: 24,
+                                ),
+                                itemCount: _allApps?.length ?? 0,
+                                itemBuilder: (context, index) {
+                                  final app = _allApps![index];
+                                  return GestureDetector(
+                                    onTap: () => _launchApp(app.packageName),
+                                    onLongPress: () {
+                                      if (!_favoriteApps.any(
+                                          (favApp) => favApp.packageName == app.packageName)) {
+                                        _addToFavorites(app);
+                                      } else {
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          SnackBar(
+                                            content: Text('This app is already in favorites'),
+                                            behavior: SnackBarBehavior.floating,
+                                          ),
+                                        );
+                                      }
+                                    },
+                                    child: Column(
+                                      children: [
+                                        Container(
+                                          width: 56,
+                                          height: 56,
+                                          padding: EdgeInsets.all(4),
+                                          decoration: BoxDecoration(
+                                            borderRadius: BorderRadius.circular(16),
+                                          ),
+                                          child: Image.memory(
+                                            app.icon,
+                                            fit: BoxFit.contain,
+                                          ),
+                                        ),
+                                        SizedBox(height: 8),
+                                        Text(
+                                          app.name,
+                                          textAlign: TextAlign.center,
+                                          maxLines: 2,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            color: Colors.white,
+                                            height: 1.2,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                },
+                              ),
+                            ),
+                          ],
                         ),
-                        SizedBox(height: 4),
-                        Text(
-                          app.name,
-                          textAlign: TextAlign.center,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: Colors.black87,
-                          ),
-                        ),
-                      ],
+                      ),
                     ),
-                  );
-                },
-              ),
+                  ),
+                ),
+              ],
             ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
+  }
+
+  void _showAllAppsWithAnimation() {
+    setState(() {
+      _showAllApps = true;
+      _dragOffset = MediaQuery.of(context).size.height;
+    });
+    
+    _slideController.animateTo(
+      1,
+      duration: Duration(milliseconds: 500),
+      curve: Curves.easeOutCubic,
+    );
+  }
+
+  void _handleDragStart(DragStartDetails details) {
+    final delta = details.globalPosition.dy;
+    final height = MediaQuery.of(context).size.height;
+    
+    // Panel kapalıyken yukarıdan aşağı kaydırma için daha geniş bir alan
+    if (delta < height * 0.3 && !_showAllApps) {
+      return;
+    }
+    
+    setState(() {
+      _isDragging = true;
+      if (!_showAllApps) {
+        _dragOffset = height - delta;
+      }
+    });
+  }
+
+  void _handleDragUpdate(DragUpdateDetails details) {
+    if (!_isDragging) return;
+    
+    final delta = details.delta.dy;
+    final height = MediaQuery.of(context).size.height;
+    
+    setState(() {
+      if (_showAllApps) {
+        _dragOffset = (_dragOffset - delta).clamp(0.0, height);
+      } else {
+        _dragOffset = (height - details.globalPosition.dy).clamp(0.0, height);
+        // Daha az mesafe ile paneli açma
+        if (_dragOffset > height * 0.15) {
+          _showAllApps = true;
+        }
+      }
+    });
+  }
+
+  void _handleDragEnd(DragEndDetails details) {
+    if (!_isDragging) return;
+    
+    final height = MediaQuery.of(context).size.height;
+    final velocity = details.primaryVelocity ?? 0;
+    
+    if (_showAllApps) {
+      if (_dragOffset < height * 0.3 || velocity > 300) {
+        // Daha yumuşak kapanma animasyonu
+        _slideController.animateTo(
+          0,
+          duration: Duration(milliseconds: 500),
+          curve: Curves.easeOutCubic,
+        ).then((_) {
+          if (mounted) {
+            setState(() {
+              _showAllApps = false;
+              _isDragging = false;
+              _dragOffset = 0;
+            });
+          }
+        });
+      } else {
+        _showAllAppsWithAnimation();
+      }
+    } else {
+      if (velocity < -300 || _dragOffset > height * 0.15) {
+        _showAllAppsWithAnimation();
+      } else {
+        // Daha yumuşak kapanma animasyonu
+        _slideController.animateTo(
+          0,
+          duration: Duration(milliseconds: 500),
+          curve: Curves.easeOutCubic,
+        ).then((_) {
+          if (mounted) {
+            setState(() {
+              _showAllApps = false;
+              _isDragging = false;
+              _dragOffset = 0;
+            });
+          }
+        });
+      }
+    }
+    
+    setState(() {
+      _isDragging = false;
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              Color(0xFF1A237E),
-              Color(0xFF0D47A1),
-              Color(0xFF01579B),
-            ],
-            stops: [0.0, 0.5, 1.0],
+      body: GestureDetector(
+        onVerticalDragStart: _handleDragStart,
+        onVerticalDragUpdate: _handleDragUpdate,
+        onVerticalDragEnd: _handleDragEnd,
+        behavior: HitTestBehavior.translucent,
+        child: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                Color(0xFF1A237E),
+                Color(0xFF0D47A1),
+                Color(0xFF01579B),
+              ],
+              stops: [0.0, 0.5, 1.0],
+            ),
           ),
-        ),
-        child: SafeArea(
-          child: Stack(
-            children: [
-              // Clock and Date
-              Positioned(
-                top: 40,
-                left: 0,
-                right: 0,
-                child: Column(
-                  children: [
-                    Text(
-                      DateFormat('HH:mm').format(_currentTime),
-                      style: TextStyle(
-                        fontSize: 64,
-                        fontWeight: FontWeight.w300,
-                        color: Colors.white,
-                      ),
-                    ),
-                    Text(
-                      DateFormat('EEEE, d MMMM').format(_currentTime),
-                      style: TextStyle(
-                        fontSize: 16,
-                        color: Colors.white70,
-                      ),
-                    ),
-                    Container(
-                      margin: EdgeInsets.only(top: 8),
-                      padding:
-                          EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: Colors.white24,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Text(
-                        'Remaining: ${widget.hours}h ${widget.minutes}m',
+          child: SafeArea(
+            child: Stack(
+              children: [
+                // Clock and Date
+                Positioned(
+                  top: 40,
+                  left: 0,
+                  right: 0,
+                  child: Column(
+                    children: [
+                      Text(
+                        DateFormat('HH:mm').format(_currentTime),
                         style: TextStyle(
+                          fontSize: 64,
+                          fontWeight: FontWeight.w300,
                           color: Colors.white,
-                          fontSize: 12,
                         ),
                       ),
-                    ),
-                  ],
-                ),
-              ),
-
-              // Main Apps Grid
-              Positioned(
-                top: 200,
-                left: 0,
-                right: 0,
-                bottom: 100,
-                child: _isLoading
-                    ? Center(child: CircularProgressIndicator())
-                    : _buildMainGrid(),
-              ),
-
-              // All Apps Panel
-              if (_showAllApps) _buildAllAppsPanel(),
-
-              // Bottom Controls
-              Positioned(
-                left: 0,
-                right: 0,
-                bottom: 24,
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  children: [
-                    GestureDetector(
-                      onTap: _sendSOS,
-                      child: Container(
-                        width: 56,
-                        height: 56,
-                        decoration: BoxDecoration(
-                          color: Colors.red,
-                          shape: BoxShape.circle,
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.red.withOpacity(0.3),
-                              blurRadius: 8,
-                              spreadRadius: 2,
-                            ),
-                          ],
+                      Text(
+                        DateFormat('EEEE, d MMMM').format(_currentTime),
+                        style: TextStyle(
+                          fontSize: 16,
+                          color: Colors.white70,
                         ),
-                        child: Center(
-                          child: Text(
-                            'SOS',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                            ),
+                      ),
+                      Container(
+                        margin: EdgeInsets.only(top: 8),
+                        padding:
+                            EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.white24,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          'Remaining:${widget.hours}h ${widget.minutes}m',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 12,
                           ),
                         ),
                       ),
-                    ),
-                    GestureDetector(
-                      onTap: () => setState(() => _showAllApps = true),
-                      child: Container(
-                        width: 56,
-                        height: 56,
-                        decoration: BoxDecoration(
-                          color: Colors.white24,
-                          shape: BoxShape.circle,
-                        ),
-                        child: Icon(
-                          Icons.apps_rounded,
-                          color: Colors.white,
-                          size: 28,
-                        ),
-                      ),
-                    ),
-                    Container(
-                      width: 56,
-                      height: 56,
-                      decoration: BoxDecoration(
-                        color: Colors.white24,
-                        shape: BoxShape.circle,
-                      ),
-                      child: Icon(
-                        Icons.family_restroom,
-                        color: Colors.white,
-                        size: 28,
-                      ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
-            ],
+
+                // Main Apps Grid
+                Positioned(
+                  top: 200,
+                  left: 0,
+                  right: 0,
+                  bottom: 100,
+                  child: _isLoading
+                      ? Center(child: CircularProgressIndicator())
+                      : _buildMainGrid(),
+                ),
+
+                // All Apps Panel with Animation
+                if (_showAllApps || _isDragging) _buildAllAppsPanel(),
+
+                // Bottom Controls
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: 24,
+                  child: AnimatedOpacity(
+                    opacity: _showAllApps || _isDragging ? 0.0 : 1.0,
+                    duration: Duration(milliseconds: 300),
+                    child: IgnorePointer(
+                      ignoring: _showAllApps || _isDragging,
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                        children: [
+                          GestureDetector(
+                            onTap: _sendSOS,
+                            child: Container(
+                              width: 56,
+                              height: 56,
+                              decoration: BoxDecoration(
+                                color: Colors.red,
+                                shape: BoxShape.circle,
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.red.withOpacity(0.3),
+                                    blurRadius: 8,
+                                    spreadRadius: 2,
+                                  ),
+                                ],
+                              ),
+                              child: Center(
+                                child: Text(
+                                  'SOS',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                          GestureDetector(
+                            onTap: _showAllAppsWithAnimation,
+                            child: Container(
+                              width: 56,
+                              height: 56,
+                              decoration: BoxDecoration(
+                                color: Colors.white24,
+                                shape: BoxShape.circle,
+                              ),
+                              child: Icon(
+                                Icons.apps_rounded,
+                                color: Colors.white,
+                                size: 28,
+                              ),
+                            ),
+                          ),
+                          Container(
+                            width: 56,
+                            height: 56,
+                            decoration: BoxDecoration(
+                              color: Colors.white24,
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(
+                              Icons.family_restroom,
+                              color: Colors.white,
+                              size: 28,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
