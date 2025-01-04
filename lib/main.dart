@@ -5,61 +5,23 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'dashboard.dart';
 import 'launcher.dart';
 
-void main() async {
-  // Ensure proper initialization
+void main() {
   WidgetsFlutterBinding.ensureInitialized();
   
-  // Set system UI style
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,
-      statusBarIconBrightness: Brightness.dark,
+      statusBarIconBrightness: Brightness.light,
+      systemNavigationBarColor: Color(0xFF1A237E),
+      systemNavigationBarIconBrightness: Brightness.light,
     ),
   );
 
-  // Handle error-prone operations in try-catch block
-  try {
-    final prefs = await SharedPreferences.getInstance();
-    final bool isSetupComplete = prefs.getBool('isSetupComplete') ?? false;
-    final String? password = prefs.getString('password');
-    final int hours = prefs.getInt('hours') ?? 0;
-    final int minutes = prefs.getInt('minutes') ?? 30;
-    final List<String> selectedApps = prefs.getStringList('favorite_apps') ?? [];
-
-    runApp(MyApp(
-      isSetupComplete: isSetupComplete,
-      password: password,
-      hours: hours,
-      minutes: minutes,
-      selectedApps: selectedApps,
-    ));
-  } catch (e) {
-    // Fallback to default values if there's an error
-    runApp(const MyApp(
-      isSetupComplete: false,
-      password: null,
-      hours: 0,
-      minutes: 30,
-      selectedApps: [],
-    ));
-  }
+  runApp(const MyApp());
 }
 
 class MyApp extends StatelessWidget {
-  final bool isSetupComplete;
-  final String? password;
-  final int hours;
-  final int minutes;
-  final List<String> selectedApps;
-
-  const MyApp({
-    Key? key,
-    required this.isSetupComplete,
-    this.password,
-    required this.hours,
-    required this.minutes,
-    required this.selectedApps,
-  }) : super(key: key);
+  const MyApp({Key? key}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
@@ -71,15 +33,7 @@ class MyApp extends StatelessWidget {
         scaffoldBackgroundColor: Colors.white,
         fontFamily: GoogleFonts.poppins().fontFamily,
       ),
-      home: isSetupComplete && password != null
-          ? Launcher(
-              hours: hours,
-              minutes: minutes,
-              password: password!,
-              emergencyContact: null,
-              selectedAppPackages: selectedApps,
-            )
-          : const Dashboard(),
+      home: SplashScreen(),
     );
   }
 }
@@ -89,31 +43,87 @@ class SplashScreen extends StatefulWidget {
   _SplashScreenState createState() => _SplashScreenState();
 }
 
-class _SplashScreenState extends State<SplashScreen>
-    with SingleTickerProviderStateMixin {
+class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderStateMixin {
   late AnimationController _controller;
-  late Animation<double> _animation;
+  late Animation<double> _fadeAnimation;
+  late Animation<double> _scaleAnimation;
+  bool _isLoading = true;
+  bool _isInitialized = false;
 
   @override
   void initState() {
     super.initState();
     _controller = AnimationController(
-      duration: const Duration(seconds: 2),
+      duration: Duration(milliseconds: 1500),
       vsync: this,
     );
 
-    _animation = CurvedAnimation(
-      parent: _controller,
-      curve: Curves.easeInOut,
+    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _controller,
+        curve: Interval(0.0, 0.5, curve: Curves.easeOut),
+      ),
     );
 
-    _controller.forward();
+    _scaleAnimation = Tween<double>(begin: 0.8, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _controller,
+        curve: Interval(0.0, 0.5, curve: Curves.easeOut),
+      ),
+    );
 
-    Future.delayed(Duration(seconds: 3), () {
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => Dashboard()),
-      );
-    });
+    _initializeApp();
+    _controller.forward();
+  }
+
+  Future<void> _initializeApp() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final bool isSetupComplete = prefs.getBool('isSetupComplete') ?? false;
+      final String? password = prefs.getString('password');
+      final int hours = prefs.getInt('hours') ?? 0;
+      final int minutes = prefs.getInt('minutes') ?? 30;
+      final List<String> selectedApps = prefs.getStringList('favorite_apps') ?? [];
+
+      await Future.delayed(Duration(milliseconds: 1500)); // Minimum görüntülenme süresi
+
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _isInitialized = true;
+        });
+
+        Navigator.pushReplacement(
+          context,
+          PageRouteBuilder(
+            pageBuilder: (context, animation, secondaryAnimation) =>
+              isSetupComplete && password != null
+                ? Launcher(
+                    hours: hours,
+                    minutes: minutes,
+                    password: password,
+                    emergencyContact: null,
+                    selectedAppPackages: selectedApps,
+                  )
+                : const Dashboard(),
+            transitionsBuilder: (context, animation, secondaryAnimation, child) {
+              return FadeTransition(
+                opacity: animation,
+                child: child,
+              );
+            },
+            transitionDuration: Duration(milliseconds: 500),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const Dashboard()),
+        );
+      }
+    }
   }
 
   @override
@@ -125,88 +135,84 @@ class _SplashScreenState extends State<SplashScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
       body: Container(
         decoration: BoxDecoration(
           gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
             colors: [
-              Colors.blue[300]!,
-              Colors.blue[100]!,
+              Color(0xFF1A237E),
+              Color(0xFF0D47A1),
+              Color(0xFF01579B),
             ],
           ),
         ),
-        child: Center(
-          child: FadeTransition(
-            opacity: _animation,
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                ScaleTransition(
-                  scale: _animation,
-                  child: Icon(
-                    Icons.child_care,
-                    size: 100,
-                    color: Colors.white,
+        child: AnimatedBuilder(
+          animation: _controller,
+          builder: (context, child) {
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  FadeTransition(
+                    opacity: _fadeAnimation,
+                    child: ScaleTransition(
+                      scale: _scaleAnimation,
+                      child: Container(
+                        width: 120,
+                        height: 120,
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.2),
+                              blurRadius: 20,
+                              spreadRadius: 5,
+                            ),
+                          ],
+                        ),
+                        child: Icon(
+                          Icons.shield_outlined,
+                          size: 60,
+                          color: Color(0xFF1A237E),
+                        ),
+                      ),
+                    ),
                   ),
-                ),
-                SizedBox(height: 20),
-                Text(
-                  'SafeLaunch',
-                  style: TextStyle(
-                    fontSize: 32,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                    letterSpacing: 1.5,
+                  SizedBox(height: 24),
+                  FadeTransition(
+                    opacity: _fadeAnimation,
+                    child: Text(
+                      'SafeLaunch',
+                      style: TextStyle(
+                        fontSize: 32,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                        letterSpacing: 1.2,
+                      ),
+                    ),
                   ),
-                ),
-                SizedBox(height: 10),
-                Text(
-                  'A Safe World for Your Child',
-                  style: TextStyle(
-                    fontSize: 16,
-                    color: Colors.white.withOpacity(0.9),
-                  ),
-                ),
-                SizedBox(height: 40),
-                Container(
-                  width: 200,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(10),
-                    color: Colors.white.withOpacity(0.2),
-                  ),
-                  child: LinearProgressIndicator(
-                    backgroundColor: Colors.transparent,
-                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                  ),
-                ),
-              ],
-            ),
-          ),
+                  SizedBox(height: 32),
+                  if (_isLoading && !_isInitialized) ...[
+                    Container(
+                      width: 200,
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: LinearProgressIndicator(
+                          backgroundColor: Colors.white24,
+                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                          minHeight: 4,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            );
+          },
         ),
       ),
-    );
-  }
-}
-
-Future<Widget> _getInitialScreen() async {
-  SharedPreferences prefs = await SharedPreferences.getInstance();
-  bool isFirstTime = prefs.getBool('isFirstTime') ?? true;
-  int hours = prefs.getInt('hours') ?? 0;
-  int minutes = prefs.getInt('minutes') ?? 0;
-  String password = prefs.getString('password') ?? '';
-  List<String> selectedApps = prefs.getStringList('favorite_apps') ?? [];
-
-  if (isFirstTime || hours == 0 || minutes == 0 || password.isEmpty) {
-    return Dashboard();
-  } else {
-    return Launcher(
-      hours: hours,
-      minutes: minutes,
-      password: password,
-      selectedAppPackages: selectedApps,
     );
   }
 }
