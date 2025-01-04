@@ -6,6 +6,8 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:safelaunch/launcher.dart';
 import 'package:flutter/services.dart';
+import 'package:safelaunch/models/app_data.dart';
+import 'dart:typed_data';
 
 class Dashboard extends StatefulWidget {
   const Dashboard({super.key});
@@ -900,6 +902,16 @@ class _DashboardState extends State<Dashboard> {
                               password: _password,
                               emergencyContact: _selectedContact,
                               selectedAppPackages: selectedAppPackages,
+                              preloadedAllApps: _cachedApps!.map((app) => AppData(
+                                name: app.name ?? '',
+                                packageName: app.packageName ?? '',
+                                icon: app.icon ?? Uint8List(0),
+                              )).toList(),
+                              preloadedFavoriteApps: selectedApps.map((app) => AppData(
+                                name: app.name ?? '',
+                                packageName: app.packageName ?? '',
+                                icon: app.icon ?? Uint8List(0),
+                              )).toList(),
                             ),
                           ),
                         );
@@ -1548,6 +1560,16 @@ class _DashboardState extends State<Dashboard> {
           password: _password,
           emergencyContact: _selectedContact,
           selectedAppPackages: selectedAppPackages,
+          preloadedAllApps: _cachedApps!.map((app) => AppData(
+            name: app.name ?? '',
+            packageName: app.packageName ?? '',
+            icon: app.icon ?? Uint8List(0),
+          )).toList(),
+          preloadedFavoriteApps: selectedApps.map((app) => AppData(
+            name: app.name ?? '',
+            packageName: app.packageName ?? '',
+            icon: app.icon ?? Uint8List(0),
+          )).toList(),
         ),
       ),
     );
@@ -1563,6 +1585,16 @@ class _DashboardState extends State<Dashboard> {
           password: _password,
           emergencyContact: _selectedContact,
           selectedAppPackages: selectedAppPackages,
+          preloadedAllApps: _cachedApps!.map((app) => AppData(
+            name: app.name ?? '',
+            packageName: app.packageName ?? '',
+            icon: app.icon ?? Uint8List(0),
+          )).toList(),
+          preloadedFavoriteApps: selectedApps.map((app) => AppData(
+            name: app.name ?? '',
+            packageName: app.packageName ?? '',
+            icon: app.icon ?? Uint8List(0),
+          )).toList(),
         ),
       ),
     );

@@ -7,6 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:safelaunch/models/app_data.dart';
 
 class Launcher extends StatefulWidget {
   final int hours;
@@ -14,6 +15,8 @@ class Launcher extends StatefulWidget {
   final String password;
   final Contact? emergencyContact;
   final List<String> selectedAppPackages;
+  final List<AppData> preloadedAllApps;
+  final List<AppData> preloadedFavoriteApps;
 
   const Launcher({
     Key? key,
@@ -21,6 +24,8 @@ class Launcher extends StatefulWidget {
     required this.minutes,
     required this.password,
     required this.selectedAppPackages,
+    required this.preloadedAllApps,
+    required this.preloadedFavoriteApps,
     this.emergencyContact,
   }) : super(key: key);
 
@@ -32,9 +37,8 @@ class _LauncherState extends State<Launcher> with SingleTickerProviderStateMixin
   static const platform = MethodChannel('com.example.safelaunch/app_launcher');
   static const String favAppsKey = 'favorite_apps';
 
-  List<AppData>? _allApps;
-  List<AppData> _favoriteApps = [];
-  bool _isLoading = false;
+  late List<AppData> _allApps;
+  late List<AppData> _favoriteApps;
   bool _showAllApps = false;
   late DateTime _currentTime;
   late Timer _timer;
@@ -49,6 +53,8 @@ class _LauncherState extends State<Launcher> with SingleTickerProviderStateMixin
   @override
   void initState() {
     super.initState();
+    _allApps = widget.preloadedAllApps;
+    _favoriteApps = widget.preloadedFavoriteApps;
     _initPrefs();
     _currentTime = DateTime.now();
     _timer = Timer.periodic(Duration(minutes: 1), (timer) {
@@ -57,7 +63,6 @@ class _LauncherState extends State<Launcher> with SingleTickerProviderStateMixin
       });
     });
 
-    // Initialize animation controller with smoother duration
     _slideController = AnimationController(
       vsync: this,
       duration: Duration(milliseconds: 400),
@@ -78,7 +83,6 @@ class _LauncherState extends State<Launcher> with SingleTickerProviderStateMixin
 
   Future<void> _initPrefs() async {
     _prefs = await SharedPreferences.getInstance();
-    _loadApps();
   }
 
   Future<void> _saveFavoriteApps() async {
@@ -86,11 +90,8 @@ class _LauncherState extends State<Launcher> with SingleTickerProviderStateMixin
   }
 
   Future<void> _loadApps() async {
-    setState(() => _isLoading = true);
-
     try {
-      final List<dynamic> result =
-          await platform.invokeMethod('getInstalledApps');
+      final List<dynamic> result = await platform.invokeMethod('getInstalledApps');
 
       if (!mounted) return;
 
@@ -103,16 +104,12 @@ class _LauncherState extends State<Launcher> with SingleTickerProviderStateMixin
         );
       }).toList();
 
-      // SharedPreferences'dan seçili uygulamaları al
-      List<String> savedPackages =
-          _prefs.getStringList(favAppsKey) ?? widget.selectedAppPackages;
+      List<String> savedPackages = _prefs.getStringList(favAppsKey) ?? widget.selectedAppPackages;
 
-      // İlk kez çalıştırılıyorsa dashboard'dan gelen uygulamaları kaydet
       if (!_prefs.containsKey(favAppsKey)) {
         _saveFavoriteApps();
       }
 
-      // Seçili uygulamaları bul
       final List<AppData> selectedApps = [];
       for (String packageName in savedPackages) {
         final app = apps.firstWhere(
@@ -125,7 +122,6 @@ class _LauncherState extends State<Launcher> with SingleTickerProviderStateMixin
       setState(() {
         _allApps = apps;
         _favoriteApps = selectedApps;
-        _isLoading = false;
       });
     } catch (e) {
       if (mounted) {
@@ -463,9 +459,9 @@ class _LauncherState extends State<Launcher> with SingleTickerProviderStateMixin
                                   crossAxisSpacing: 16,
                                   mainAxisSpacing: 24,
                                 ),
-                                itemCount: _allApps?.length ?? 0,
+                                itemCount: _allApps.length,
                                 itemBuilder: (context, index) {
-                                  final app = _allApps![index];
+                                  final app = _allApps[index];
                                   return GestureDetector(
                                     onTap: () => _launchApp(app.packageName),
                                     onLongPress: () {
@@ -669,8 +665,7 @@ class _LauncherState extends State<Launcher> with SingleTickerProviderStateMixin
                       ),
                       Container(
                         margin: EdgeInsets.only(top: 8),
-                        padding:
-                            EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                        padding: EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                         decoration: BoxDecoration(
                           color: Colors.white24,
                           borderRadius: BorderRadius.circular(12),
@@ -693,9 +688,7 @@ class _LauncherState extends State<Launcher> with SingleTickerProviderStateMixin
                   left: 0,
                   right: 0,
                   bottom: 100,
-                  child: _isLoading
-                      ? Center(child: CircularProgressIndicator())
-                      : _buildMainGrid(),
+                  child: _buildMainGrid(),
                 ),
 
                 // All Apps Panel with Animation
@@ -783,16 +776,4 @@ class _LauncherState extends State<Launcher> with SingleTickerProviderStateMixin
       ),
     );
   }
-}
-
-class AppData {
-  final String name;
-  final String packageName;
-  final Uint8List icon;
-
-  AppData({
-    required this.name,
-    required this.packageName,
-    required this.icon,
-  });
 }
