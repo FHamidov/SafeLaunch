@@ -59,8 +59,9 @@ class _LauncherState extends State<Launcher> with SingleTickerProviderStateMixin
   void initState() {
     super.initState();
     _allApps = widget.preloadedAllApps;
+    _allApps.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
     _favoriteApps = widget.preloadedFavoriteApps;
-    _groupAppsByLetter(); // Uygulamaları harflere göre grupla
+    _groupAppsByLetter();
     _initPrefs();
     _currentTime = DateTime.now();
     _timer = Timer.periodic(Duration(minutes: 1), (timer) {
@@ -111,6 +112,8 @@ class _LauncherState extends State<Launcher> with SingleTickerProviderStateMixin
         );
       }).toList();
 
+      apps.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+
       List<String> savedPackages = _prefs.getStringList(favAppsKey) ?? widget.selectedAppPackages;
 
       if (!_prefs.containsKey(favAppsKey)) {
@@ -129,6 +132,7 @@ class _LauncherState extends State<Launcher> with SingleTickerProviderStateMixin
       setState(() {
         _allApps = apps;
         _favoriteApps = selectedApps;
+        _groupAppsByLetter();
       });
     } catch (e) {
       if (mounted) {
@@ -391,6 +395,9 @@ class _LauncherState extends State<Launcher> with SingleTickerProviderStateMixin
   // Uygulamaları harflere göre gruplama
   void _groupAppsByLetter() {
     _groupedApps.clear();
+    // Önce tüm uygulamaları alfabetik sırala
+    _allApps.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+    
     for (var app in _allApps) {
       String firstLetter = app.name.toUpperCase()[0];
       if (!_groupedApps.containsKey(firstLetter)) {
@@ -398,10 +405,6 @@ class _LauncherState extends State<Launcher> with SingleTickerProviderStateMixin
       }
       _groupedApps[firstLetter]?.add(app);
     }
-    // Her grup içinde alfabetik sıralama
-    _groupedApps.forEach((key, value) {
-      value.sort((a, b) => a.name.compareTo(b.name));
-    });
   }
 
   // Harf seçildiğinde çağrılacak fonksiyon
