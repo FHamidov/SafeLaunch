@@ -43,6 +43,8 @@ class _LauncherState extends State<Launcher> with SingleTickerProviderStateMixin
   late DateTime _currentTime;
   late Timer _timer;
   late SharedPreferences _prefs;
+  String _selectedLetter = 'A'; // Seçili harf
+  Map<String, List<AppData>> _groupedApps = {}; // Harflere göre gruplanmış uygulamalar
   
   // Animation controllers
   late AnimationController _slideController;
@@ -50,11 +52,15 @@ class _LauncherState extends State<Launcher> with SingleTickerProviderStateMixin
   double _dragOffset = 0;
   bool _isDragging = false;
 
+  // Scroll controller ekleyelim
+  final ScrollController _scrollController = ScrollController();
+
   @override
   void initState() {
     super.initState();
     _allApps = widget.preloadedAllApps;
     _favoriteApps = widget.preloadedFavoriteApps;
+    _groupAppsByLetter(); // Uygulamaları harflere göre grupla
     _initPrefs();
     _currentTime = DateTime.now();
     _timer = Timer.periodic(Duration(minutes: 1), (timer) {
@@ -78,6 +84,7 @@ class _LauncherState extends State<Launcher> with SingleTickerProviderStateMixin
   void dispose() {
     _timer.cancel();
     _slideController.dispose();
+    _scrollController.dispose();
     super.dispose();
   }
 
@@ -381,6 +388,205 @@ class _LauncherState extends State<Launcher> with SingleTickerProviderStateMixin
     );
   }
 
+  // Uygulamaları harflere göre gruplama
+  void _groupAppsByLetter() {
+    _groupedApps.clear();
+    for (var app in _allApps) {
+      String firstLetter = app.name.toUpperCase()[0];
+      if (!_groupedApps.containsKey(firstLetter)) {
+        _groupedApps[firstLetter] = [];
+      }
+      _groupedApps[firstLetter]?.add(app);
+    }
+    // Her grup içinde alfabetik sıralama
+    _groupedApps.forEach((key, value) {
+      value.sort((a, b) => a.name.compareTo(b.name));
+    });
+  }
+
+  // Harf seçildiğinde çağrılacak fonksiyon
+  void _onLetterSelected(String letter) {
+    setState(() {
+      _selectedLetter = letter;
+    });
+    
+    // Seçili harfin ilk uygulamasına scroll yap
+    int targetIndex = _allApps.indexWhere(
+      (app) => app.name.toUpperCase().startsWith(letter)
+    );
+    
+    if (targetIndex != -1) {
+      _scrollController.animateTo(
+        targetIndex * 72.0, // ListTile height + padding
+        duration: Duration(milliseconds: 500),
+        curve: Curves.easeInOutCubic,
+      );
+    }
+  }
+
+  // Sağ taraftaki hızlı erişim paneli
+  Widget _buildQuickAccessPanel() {
+    final double screenHeight = MediaQuery.of(context).size.height;
+    final double panelHeight = screenHeight * 0.8;
+    final double totalPadding = 12.0;
+    final double letterHeight = (panelHeight - totalPadding) / 26;
+
+    return Container(
+      width: 40,
+      height: panelHeight,
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.15),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 8,
+            spreadRadius: 1,
+          ),
+        ],
+      ),
+      margin: EdgeInsets.symmetric(horizontal: 6),
+      child: Stack(
+        children: [
+          // Görünür harfler
+          Positioned.fill(
+            child: Container(
+              padding: EdgeInsets.symmetric(vertical: totalPadding / 2),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  return Column(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: List.generate(26, (index) {
+                      String letter = String.fromCharCode(65 + index);
+                      bool hasApps = _groupedApps.containsKey(letter) && 
+                                  (_groupedApps[letter]?.isNotEmpty ?? false);
+                      bool isSelected = _selectedLetter == letter;
+                      
+                      return Container(
+                        height: letterHeight,
+                        width: 34,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: isSelected ? Colors.white.withOpacity(0.2) : Colors.transparent,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          letter,
+                          style: TextStyle(
+                            color: hasApps ? Colors.white : Colors.white.withOpacity(0.3),
+                            fontSize: 13,
+                            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                          ),
+                        ),
+                      );
+                    }),
+                  );
+                },
+              ),
+            ),
+          ),
+          // Görünmez kaydırma alanı
+          Positioned.fill(
+            child: GestureDetector(
+              onTapDown: (details) => _handleLetterSelection(details.localPosition.dy, letterHeight),
+              onVerticalDragStart: (details) => _handleLetterSelection(details.localPosition.dy, letterHeight),
+              onVerticalDragUpdate: (details) => _handleLetterSelection(details.localPosition.dy, letterHeight),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _handleLetterSelection(double dy, double letterHeight) {
+    // Üst padding'i çıkar
+    double adjustedDy = dy - 6; // Padding azaltıldı
+    if (adjustedDy < 0) return;
+    
+    // Hangi harfin üzerinde olduğumuzu hesapla
+    int letterIndex = (adjustedDy / letterHeight).floor();
+    if (letterIndex < 0 || letterIndex >= 26) return;
+    
+    String letter = String.fromCharCode(65 + letterIndex);
+    if (_groupedApps.containsKey(letter) && 
+        (_groupedApps[letter]?.isNotEmpty ?? false)) {
+      _onLetterSelected(letter);
+    }
+  }
+
+  // Gruplandırılmış uygulamalar listesi
+  Widget _buildGroupedAppsList() {
+    return ListView.builder(
+      controller: _scrollController,
+      physics: BouncingScrollPhysics(),
+      padding: EdgeInsets.only(
+        right: 52, // Sağ boşluk azaltıldı
+        bottom: 100,
+      ),
+      itemCount: _allApps.length,
+      itemBuilder: (context, index) {
+        final app = _allApps[index];
+        final bool isHighlighted = app.name.toUpperCase().startsWith(_selectedLetter);
+        
+        return AnimatedContainer(
+          duration: Duration(milliseconds: 300),
+          decoration: BoxDecoration(
+            color: isHighlighted ? Colors.white.withOpacity(0.1) : Colors.transparent,
+            borderRadius: BorderRadius.circular(12),
+            border: isHighlighted ? Border.all(
+              color: Colors.white.withOpacity(0.2),
+              width: 1,
+            ) : null,
+          ),
+          margin: EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+          child: ListTile(
+            contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            leading: Container(
+              width: 44,
+              height: 44,
+              padding: EdgeInsets.all(4),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                color: isHighlighted ? Colors.white.withOpacity(0.1) : Colors.transparent,
+              ),
+              child: Image.memory(
+                app.icon,
+                fit: BoxFit.contain,
+                opacity: isHighlighted ? const AlwaysStoppedAnimation(1.0) : const AlwaysStoppedAnimation(0.5),
+              ),
+            ),
+            title: Text(
+              app.name,
+              style: TextStyle(
+                color: isHighlighted ? Colors.white : Colors.white.withOpacity(0.5),
+                fontWeight: isHighlighted ? FontWeight.w500 : FontWeight.normal,
+                fontSize: 15,
+              ),
+            ),
+            trailing: isHighlighted ? Icon(
+              Icons.chevron_right,
+              color: Colors.white.withOpacity(0.5),
+              size: 20,
+            ) : null,
+            onTap: () => _launchApp(app.packageName),
+            onLongPress: () {
+              if (!_favoriteApps.any((favApp) => favApp.packageName == app.packageName)) {
+                _addToFavorites(app);
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('This app is already in favorites'),
+                    behavior: SnackBarBehavior.floating,
+                  ),
+                );
+              }
+            },
+          ),
+        );
+      },
+    );
+  }
+
   Widget _buildAllAppsPanel() {
     return AnimatedBuilder(
       animation: _slideAnimation,
@@ -448,65 +654,17 @@ class _LauncherState extends State<Launcher> with SingleTickerProviderStateMixin
                                 ],
                               ),
                             ),
-                            // Apps grid
+                            // Apps list with quick access panel
                             Expanded(
-                              child: GridView.builder(
-                                padding: EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-                                physics: BouncingScrollPhysics(),
-                                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                                  crossAxisCount: 4,
-                                  childAspectRatio: 0.75,
-                                  crossAxisSpacing: 16,
-                                  mainAxisSpacing: 24,
-                                ),
-                                itemCount: _allApps.length,
-                                itemBuilder: (context, index) {
-                                  final app = _allApps[index];
-                                  return GestureDetector(
-                                    onTap: () => _launchApp(app.packageName),
-                                    onLongPress: () {
-                                      if (!_favoriteApps.any(
-                                          (favApp) => favApp.packageName == app.packageName)) {
-                                        _addToFavorites(app);
-                                      } else {
-                                        ScaffoldMessenger.of(context).showSnackBar(
-                                          SnackBar(
-                                            content: Text('This app is already in favorites'),
-                                            behavior: SnackBarBehavior.floating,
-                                          ),
-                                        );
-                                      }
-                                    },
-                                    child: Column(
-                                      children: [
-                                        Container(
-                                          width: 56,
-                                          height: 56,
-                                          padding: EdgeInsets.all(4),
-                                          decoration: BoxDecoration(
-                                            borderRadius: BorderRadius.circular(16),
-                                          ),
-                                          child: Image.memory(
-                                            app.icon,
-                                            fit: BoxFit.contain,
-                                          ),
-                                        ),
-                                        SizedBox(height: 8),
-                                        Text(
-                                          app.name,
-                                          textAlign: TextAlign.center,
-                                          maxLines: 2,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: TextStyle(
-                                            fontSize: 12,
-                                            color: Colors.white,
-                                            height: 1.2,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  );
-                                },
+                              child: Stack(
+                                children: [
+                                  _buildGroupedAppsList(),
+                                  Positioned(
+                                    right: 0,
+                                    top: 0, // En üste taşındı
+                                    child: _buildQuickAccessPanel(),
+                                  ),
+                                ],
                               ),
                             ),
                           ],
