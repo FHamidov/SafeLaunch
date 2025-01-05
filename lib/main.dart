@@ -120,11 +120,8 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
       setState(() => _loadingProgress = 0.8);
 
       // Favori uygulamaları hazırla
-      List<String> savedPackages = prefs.getStringList(favAppsKey) ?? [];
-      if (savedPackages.isEmpty) {
-        savedPackages = prefs.getStringList('favorite_apps') ?? [];
-      }
-
+      List<String> savedPackages = prefs.getStringList('favAppsKey') ?? [];
+      
       final List<AppData> selectedApps = [];
       for (String packageName in savedPackages) {
         final app = apps.firstWhere(

@@ -873,8 +873,8 @@ class _DashboardState extends State<Dashboard> {
                         await prefs.setInt('hours', _hours);
                         await prefs.setInt('minutes', _minutes);
                         await prefs.setStringList(
-                          'selectedApps',
-                          selectedApps.map((app) => app.packageName!).toList(),
+                          'favAppsKey',
+                          selectedAppPackages,
                         );
                         if (_selectedContact != null) {
                           await prefs.setString(
@@ -1608,7 +1608,7 @@ class _DashboardState extends State<Dashboard> {
     await prefs.setString('password', _password);
 
     selectedAppPackages = selectedApps.map((app) => app.packageName!).toList();
-    await prefs.setStringList('favorite_apps', selectedAppPackages);
+    await prefs.setStringList('favAppsKey', selectedAppPackages);
 
     _navigateToLauncher();
   }
