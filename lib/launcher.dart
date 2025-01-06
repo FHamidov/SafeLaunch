@@ -91,6 +91,25 @@ class _LauncherState extends State<Launcher> with SingleTickerProviderStateMixin
 
   Future<void> _initPrefs() async {
     _prefs = await SharedPreferences.getInstance();
+    
+    // Kaydedilmiş sıralamayı yükle
+    List<String> savedPackages = _prefs.getStringList(favAppsKey) ?? widget.selectedAppPackages;
+    
+    if (savedPackages.isNotEmpty) {
+      // Kaydedilmiş sıralamaya göre favori uygulamaları düzenle
+      List<AppData> orderedFavorites = [];
+      for (String packageName in savedPackages) {
+        final app = _allApps.firstWhere(
+          (app) => app.packageName == packageName,
+          orElse: () => _allApps.first,
+        );
+        orderedFavorites.add(app);
+      }
+      
+      setState(() {
+        _favoriteApps = orderedFavorites;
+      });
+    }
   }
 
   Future<void> _saveFavoriteApps() async {
@@ -114,12 +133,10 @@ class _LauncherState extends State<Launcher> with SingleTickerProviderStateMixin
 
       apps.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
 
+      // Kaydedilmiş sıralamayı al
       List<String> savedPackages = _prefs.getStringList(favAppsKey) ?? widget.selectedAppPackages;
 
-      if (!_prefs.containsKey(favAppsKey)) {
-        _saveFavoriteApps();
-      }
-
+      // Kaydedilmiş sıralamaya göre favori uygulamaları düzenle
       final List<AppData> selectedApps = [];
       for (String packageName in savedPackages) {
         final app = apps.firstWhere(
@@ -148,11 +165,10 @@ class _LauncherState extends State<Launcher> with SingleTickerProviderStateMixin
     setState(() {
       final app = _favoriteApps.removeAt(oldIndex);
       _favoriteApps.insert(newIndex, app);
-      // Değişiklikleri SharedPreferences'a kaydet
-      _prefs.setStringList(
-        favAppsKey,
-        _favoriteApps.map((app) => app.packageName).toList(),
-      );
+      
+      // Yeni sıralamayı SharedPreferences'a kaydet
+      final List<String> updatedPackages = _favoriteApps.map((app) => app.packageName).toList();
+      _prefs.setStringList(favAppsKey, updatedPackages);
     });
   }
 
