@@ -247,9 +247,94 @@ class _LauncherState extends State<Launcher> with SingleTickerProviderStateMixin
       data: {'type': 'app', 'index': index, 'data': app},
       feedback: Material(
         color: Colors.transparent,
+        elevation: 8.0,
+        borderRadius: BorderRadius.circular(12),
         child: Container(
-          width: 60,
-          height: 80,
+          width: 70,
+          height: 90,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.3),
+                blurRadius: 15,
+                spreadRadius: 3,
+              ),
+              BoxShadow(
+                color: Colors.white.withOpacity(0.2),
+                blurRadius: 10,
+                spreadRadius: 1,
+              ),
+            ],
+          ),
+          child: Transform.scale(
+            scale: 1.1,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  width: 54,
+                  height: 54,
+                  padding: EdgeInsets.all(4),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(12),
+                    color: Colors.white.withOpacity(0.15),
+                    border: Border.all(
+                      color: Colors.white.withOpacity(0.5),
+                      width: 2,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.white.withOpacity(0.2),
+                        blurRadius: 8,
+                        spreadRadius: 2,
+                      ),
+                    ],
+                  ),
+                  child: Image.memory(
+                    app.icon,
+                    fit: BoxFit.contain,
+                  ),
+                ),
+                SizedBox(height: 6),
+                Container(
+                  padding: EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.6),
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(
+                      color: Colors.white.withOpacity(0.3),
+                      width: 1,
+                    ),
+                  ),
+                  child: Text(
+                    app.name,
+                    textAlign: TextAlign.center,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: Colors.white,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+      childWhenDragging: Opacity(
+        opacity: 0.3,
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: Colors.white.withOpacity(0.3),
+              width: 2,
+              style: BorderStyle.solid,
+            ),
+          ),
           child: Column(
             children: [
               Container(
@@ -261,6 +346,8 @@ class _LauncherState extends State<Launcher> with SingleTickerProviderStateMixin
                 child: Image.memory(
                   app.icon,
                   fit: BoxFit.contain,
+                  color: Colors.white.withOpacity(0.3),
+                  colorBlendMode: BlendMode.srcATop,
                 ),
               ),
               SizedBox(height: 4),
@@ -271,40 +358,11 @@ class _LauncherState extends State<Launcher> with SingleTickerProviderStateMixin
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   fontSize: 11,
-                  color: Colors.white,
+                  color: Colors.white.withOpacity(0.3),
                 ),
               ),
             ],
           ),
-        ),
-      ),
-      childWhenDragging: Opacity(
-        opacity: 0.5,
-        child: Column(
-          children: [
-            Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Image.memory(
-                app.icon,
-                fit: BoxFit.contain,
-              ),
-            ),
-            SizedBox(height: 4),
-            Text(
-              app.name,
-              textAlign: TextAlign.center,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: 11,
-                color: Colors.white,
-              ),
-            ),
-          ],
         ),
       ),
       child: DragTarget<Map<String, dynamic>>(
@@ -318,57 +376,84 @@ class _LauncherState extends State<Launcher> with SingleTickerProviderStateMixin
           }
         },
         builder: (context, candidateData, rejectedData) {
-          return GestureDetector(
-            onTap: () => _launchApp(app.packageName),
-            onLongPress: () {
-              // Uzun basma menüsü
-              showDialog(
-                context: context,
-                builder: (context) => AlertDialog(
-                  title: Text('Remove from favorites?'),
-                  content: Text(
-                      'Do you want to remove ${app.name} from your favorite apps?'),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(context),
-                      child: Text('Cancel'),
+          final isDragTarget = candidateData.isNotEmpty;
+          return AnimatedContainer(
+            duration: Duration(milliseconds: 200),
+            transform: isDragTarget 
+              ? (Matrix4.identity()..scale(1.1))
+              : Matrix4.identity(),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+              border: isDragTarget ? Border.all(
+                color: Colors.white.withOpacity(0.5),
+                width: 2,
+              ) : null,
+              boxShadow: isDragTarget ? [
+                BoxShadow(
+                  color: Colors.white.withOpacity(0.2),
+                  blurRadius: 8,
+                  spreadRadius: 2,
+                ),
+              ] : null,
+            ),
+            child: GestureDetector(
+              onTap: () => _launchApp(app.packageName),
+              child: Column(
+                children: [
+                  Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: isDragTarget ? [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.1),
+                          blurRadius: 4,
+                          spreadRadius: 1,
+                        ),
+                      ] : null,
                     ),
-                    TextButton(
-                      onPressed: () {
-                        Navigator.pop(context);
-                        _removeFromFavorites(index);
-                      },
-                      child: Text('Remove'),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: BackdropFilter(
+                        filter: ImageFilter.blur(sigmaX: isDragTarget ? 5 : 0, sigmaY: isDragTarget ? 5 : 0),
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: isDragTarget ? Colors.white.withOpacity(0.1) : Colors.transparent,
+                            border: isDragTarget ? Border.all(
+                              color: Colors.white.withOpacity(0.2),
+                              width: 1,
+                            ) : null,
+                          ),
+                          child: Image.memory(
+                            app.icon,
+                            fit: BoxFit.contain,
+                          ),
+                        ),
+                      ),
                     ),
-                  ],
-                ),
-              );
-            },
-            child: Column(
-              children: [
-                Container(
-                  width: 48,
-                  height: 48,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(12),
                   ),
-                  child: Image.memory(
-                    app.icon,
-                    fit: BoxFit.contain,
+                  SizedBox(height: 4),
+                  Container(
+                    padding: EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: isDragTarget ? Colors.white.withOpacity(0.2) : Colors.transparent,
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      app.name,
+                      textAlign: TextAlign.center,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: Colors.white,
+                        fontWeight: isDragTarget ? FontWeight.w500 : FontWeight.normal,
+                      ),
+                    ),
                   ),
-                ),
-                SizedBox(height: 4),
-                Text(
-                  app.name,
-                  textAlign: TextAlign.center,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: Colors.white,
-                  ),
-                ),
-              ],
+                ],
+              ),
             ),
           );
         },
