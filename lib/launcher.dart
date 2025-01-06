@@ -624,7 +624,7 @@ class _LauncherState extends State<Launcher> with SingleTickerProviderStateMixin
       controller: _scrollController,
       physics: BouncingScrollPhysics(),
       padding: EdgeInsets.only(
-        right: 52, // Sağ boşluk azaltıldı
+        right: 52,
         bottom: 100,
       ),
       itemCount: _allApps.length,
@@ -673,18 +673,6 @@ class _LauncherState extends State<Launcher> with SingleTickerProviderStateMixin
               size: 20,
             ) : null,
             onTap: () => _launchApp(app.packageName),
-            onLongPress: () {
-              if (!_favoriteApps.any((favApp) => favApp.packageName == app.packageName)) {
-                _addToFavorites(app);
-              } else {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('This app is already in favorites'),
-                    behavior: SnackBarBehavior.floating,
-                  ),
-                );
-              }
-            },
           ),
         );
       },
