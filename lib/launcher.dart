@@ -45,6 +45,9 @@ class _LauncherState extends State<Launcher> with SingleTickerProviderStateMixin
   late SharedPreferences _prefs;
   String _selectedLetter = 'A'; // Seçili harf
   Map<String, List<AppData>> _groupedApps = {}; // Harflere göre gruplanmış uygulamalar
+  bool _isLocked = false;
+  String _enteredPassword = '';
+  int _remainingMinutes = 0;
   
   // Animation controllers
   late AnimationController _slideController;
@@ -64,11 +67,10 @@ class _LauncherState extends State<Launcher> with SingleTickerProviderStateMixin
     _groupAppsByLetter();
     _initPrefs();
     _currentTime = DateTime.now();
-    _timer = Timer.periodic(Duration(minutes: 1), (timer) {
-      setState(() {
-        _currentTime = DateTime.now();
-      });
-    });
+    _loadSavedTime();
+    
+    // Check permissions
+    _checkPermissions();
 
     _slideController = AnimationController(
       vsync: this,
@@ -79,6 +81,21 @@ class _LauncherState extends State<Launcher> with SingleTickerProviderStateMixin
       curve: Curves.easeOutExpo,
       reverseCurve: Curves.easeInExpo,
     );
+
+    // Start timer
+    _timer = Timer.periodic(Duration(seconds: 1), (timer) {
+      setState(() {
+        _currentTime = DateTime.now();
+        if (_remainingMinutes > 0) {
+          _remainingMinutes--;
+          _updateRemainingTime();
+        }
+        
+        if (_remainingMinutes <= 0 && !_isLocked) {
+          _lockScreen();
+        }
+      });
+    });
   }
 
   @override
@@ -206,15 +223,15 @@ class _LauncherState extends State<Launcher> with SingleTickerProviderStateMixin
   Future<void> _sendSOS() async {
     try {
       if (widget.emergencyContact != null && widget.emergencyContact!.phones.isNotEmpty) {
-        // Əvvəlcə lokasiya al
+        // Get location
         Position position = await Geolocator.getCurrentPosition(
           desiredAccuracy: LocationAccuracy.high,
         );
 
         final phoneNumber = widget.emergencyContact!.phones.first.number;
-        final locationMessage = 'Təcili yardım! Mənim yerim: https://www.google.com/maps?q=${position.latitude},${position.longitude}';
+        final locationMessage = 'Emergency! My location: https://www.google.com/maps?q=${position.latitude},${position.longitude}';
 
-        // SMS göndər
+        // Send SMS
         final Uri smsUri = Uri(
           scheme: 'sms',
           path: phoneNumber,
@@ -222,10 +239,10 @@ class _LauncherState extends State<Launcher> with SingleTickerProviderStateMixin
         );
         await launchUrl(smsUri);
 
-        // Bildiriş göstər
+        // Show notification
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Təcili əlaqə nömrəsinə məkan məlumatı göndərilir'),
+            content: Text('Sending location to emergency contact'),
             backgroundColor: Colors.green,
             duration: Duration(seconds: 3),
           ),
@@ -233,7 +250,7 @@ class _LauncherState extends State<Launcher> with SingleTickerProviderStateMixin
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Təcili əlaqə nömrəsi tapılmadı'),
+            content: Text('No emergency contact found'),
             backgroundColor: Colors.red,
             duration: Duration(seconds: 3),
           ),
@@ -242,7 +259,7 @@ class _LauncherState extends State<Launcher> with SingleTickerProviderStateMixin
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('SOS göndərilməsi zamanı xəta baş verdi'),
+          content: Text('Failed to send SOS'),
           backgroundColor: Colors.red,
           duration: Duration(seconds: 3),
         ),
@@ -253,7 +270,6 @@ class _LauncherState extends State<Launcher> with SingleTickerProviderStateMixin
   Future<void> _launchApp(String packageName) async {
     try {
       await platform.invokeMethod('launchApp', {'packageName': packageName});
-      // Uygulama başlatıldıktan sonra paneli kapat
       if (_showAllApps) {
         _slideController.animateTo(
           0,
@@ -885,8 +901,273 @@ class _LauncherState extends State<Launcher> with SingleTickerProviderStateMixin
     });
   }
 
+  Future<void> _checkPermissions() async {
+    try {
+      // Check overlay permission
+      final hasOverlay = await platform.invokeMethod('checkOverlayPermission');
+      if (!hasOverlay) {
+        await platform.invokeMethod('requestOverlayPermission');
+      }
+
+      // Check usage stats permission
+      final hasUsageStats = await platform.invokeMethod('checkUsageStatsPermission');
+      if (!hasUsageStats) {
+        await platform.invokeMethod('requestUsageStatsPermission');
+      }
+    } catch (e) {
+      print('Permission check error: $e');
+    }
+  }
+
+  Future<void> _loadSavedTime() async {
+    final prefs = await SharedPreferences.getInstance();
+    final savedMinutes = prefs.getInt('remainingMinutes');
+    final wasLocked = prefs.getBool('isLocked') ?? false;
+    
+    if (savedMinutes != null) {
+      setState(() {
+        _remainingMinutes = savedMinutes;
+        if (wasLocked || savedMinutes <= 0) {
+          _lockScreen();
+        }
+      });
+    } else {
+      setState(() {
+        _remainingMinutes = widget.hours * 60 + widget.minutes;
+      });
+    }
+  }
+
+  Future<void> _updateRemainingTime() async {
+    await _prefs.setInt('remainingMinutes', _remainingMinutes);
+    await _prefs.setBool('isLocked', _isLocked);
+  }
+
+  void _lockScreen() {
+    setState(() {
+      _isLocked = true;
+      _enteredPassword = '';
+    });
+    
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => WillPopScope(
+        onWillPop: () async => false,
+        child: TweenAnimationBuilder(
+          duration: Duration(milliseconds: 800),
+          tween: Tween<double>(begin: 0, end: 1),
+          builder: (context, double value, child) {
+            return Transform.scale(
+              scale: 0.95 + (0.05 * value),
+              child: Opacity(
+                opacity: value,
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 10 * value, sigmaY: 10 * value),
+                  child: Dialog(
+                    backgroundColor: Colors.transparent,
+                    elevation: 0,
+                    child: Container(
+                      padding: EdgeInsets.all(24),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.95),
+                        borderRadius: BorderRadius.circular(30),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.blue.withOpacity(0.2),
+                            blurRadius: 20,
+                            spreadRadius: 5,
+                          ),
+                        ],
+                        border: Border.all(
+                          color: Colors.white.withOpacity(0.5),
+                          width: 2,
+                        ),
+                      ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          TweenAnimationBuilder(
+                            duration: Duration(milliseconds: 1200),
+                            tween: Tween<double>(begin: 0, end: 1),
+                            builder: (context, double value, child) {
+                              return Transform.scale(
+                                scale: 0.8 + (0.2 * value),
+                                child: child,
+                              );
+                            },
+                            child: Stack(
+                              alignment: Alignment.center,
+                              children: [
+                                Container(
+                                  width: 80,
+                                  height: 80,
+                                  decoration: BoxDecoration(
+                                    color: Colors.blue.withOpacity(0.1),
+                                    shape: BoxShape.circle,
+                                  ),
+                                ),
+                                Container(
+                                  width: 60,
+                                  height: 60,
+                                  decoration: BoxDecoration(
+                                    color: Colors.blue.withOpacity(0.2),
+                                    shape: BoxShape.circle,
+                                  ),
+                                ),
+                                Icon(
+                                  Icons.timer_off_outlined,
+                                  size: 40,
+                                  color: Colors.blue[600],
+                                ),
+                              ],
+                            ),
+                          ),
+                          SizedBox(height: 24),
+                          ShaderMask(
+                            shaderCallback: (bounds) => LinearGradient(
+                              colors: [Colors.blue, Colors.purple],
+                            ).createShader(bounds),
+                            child: Text(
+                              'Time is Up!',
+                              style: TextStyle(
+                                fontSize: 32,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ),
+                          SizedBox(height: 12),
+                          Text(
+                            'Take a break and do something fun!',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: 16,
+                              color: Colors.grey[600],
+                              height: 1.5,
+                            ),
+                          ),
+                          SizedBox(height: 32),
+                          Container(
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                colors: [Colors.blue.shade100, Colors.purple.shade100],
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                              ),
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            padding: EdgeInsets.all(2),
+                            child: TextField(
+                              obscureText: true,
+                              textAlign: TextAlign.center,
+                              style: TextStyle(fontSize: 20),
+                              decoration: InputDecoration(
+                                hintText: '••••••',
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(15),
+                                  borderSide: BorderSide.none,
+                                ),
+                                filled: true,
+                                fillColor: Colors.white,
+                                contentPadding: EdgeInsets.symmetric(
+                                  horizontal: 20,
+                                  vertical: 16,
+                                ),
+                              ),
+                              onChanged: (value) {
+                                _enteredPassword = value;
+                              },
+                              onSubmitted: _checkPassword,
+                            ),
+                          ),
+                          SizedBox(height: 20),
+                          TweenAnimationBuilder(
+                            duration: Duration(milliseconds: 1000),
+                            tween: Tween<double>(begin: 0, end: 1),
+                            builder: (context, double value, child) {
+                              return Transform.translate(
+                                offset: Offset(0, 20 * (1 - value)),
+                                child: Opacity(
+                                  opacity: value,
+                                  child: child,
+                                ),
+                              );
+                            },
+                            child: ElevatedButton(
+                              onPressed: () => _checkPassword(_enteredPassword),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.blue[600],
+                                padding: EdgeInsets.symmetric(
+                                  horizontal: 40,
+                                  vertical: 16,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                elevation: 4,
+                                shadowColor: Colors.blue.withOpacity(0.5),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    'Unlock',
+                                    style: TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  SizedBox(width: 8),
+                                  Icon(Icons.lock_open_rounded, size: 20),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  void _checkPassword(String password) {
+    if (password == widget.password) {
+      setState(() {
+        _isLocked = false;
+        _remainingMinutes = widget.hours * 60 + widget.minutes;
+        _updateRemainingTime();
+      });
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Wrong password!'),
+          backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    if (_isLocked) {
+      return WillPopScope(
+        onWillPop: () async => false,
+        child: Scaffold(
+          body: Container(
+            color: Colors.black,
+            child: _buildLockScreen(),
+          ),
+        ),
+      );
+    }
     return Scaffold(
       body: GestureDetector(
         onVerticalDragStart: _handleDragStart,
@@ -933,17 +1214,40 @@ class _LauncherState extends State<Launcher> with SingleTickerProviderStateMixin
                       ),
                       Container(
                         margin: EdgeInsets.only(top: 8),
-                        padding: EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                        padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                         decoration: BoxDecoration(
                           color: Colors.white24,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Text(
-                          'Remaining:${widget.hours}h ${widget.minutes}m',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 12,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: Colors.white.withOpacity(0.3),
+                            width: 1,
                           ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.1),
+                              blurRadius: 8,
+                              spreadRadius: 0,
+                            ),
+                          ],
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.timer_outlined,
+                              color: Colors.white,
+                              size: 18,
+                            ),
+                            SizedBox(width: 8),
+                            Text(
+                              'Time left: ${_remainingMinutes ~/ 60}h ${_remainingMinutes % 60}m',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 14,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ],
@@ -1019,6 +1323,46 @@ class _LauncherState extends State<Launcher> with SingleTickerProviderStateMixin
                               ),
                             ),
                           ),
+                          GestureDetector(
+                            onTap: () {
+                              setState(() {
+                                _remainingMinutes = 1;
+                                _updateRemainingTime();
+                              });
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('Time limit set to 1 minute'),
+                                  backgroundColor: Colors.blue,
+                                  duration: Duration(seconds: 2),
+                                ),
+                              );
+                            },
+                            child: Container(
+                              width: 56,
+                              height: 56,
+                              decoration: BoxDecoration(
+                                color: Colors.blue,
+                                shape: BoxShape.circle,
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.blue.withOpacity(0.3),
+                                    blurRadius: 8,
+                                    spreadRadius: 2,
+                                  ),
+                                ],
+                              ),
+                              child: Center(
+                                child: Text(
+                                  '1m',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
                           Container(
                             width: 56,
                             height: 56,
@@ -1042,6 +1386,53 @@ class _LauncherState extends State<Launcher> with SingleTickerProviderStateMixin
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildLockScreen() {
+    return TweenAnimationBuilder(
+      duration: Duration(milliseconds: 800),
+      tween: Tween<double>(begin: 0, end: 1),
+      builder: (context, double value, child) {
+        return Transform.scale(
+          scale: 0.95 + (0.05 * value),
+          child: Opacity(
+            opacity: value,
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 10 * value, sigmaY: 10 * value),
+              child: Container(
+                padding: EdgeInsets.all(24),
+                child: Center(
+                  child: Container(
+                    padding: EdgeInsets.all(24),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.95),
+                      borderRadius: BorderRadius.circular(30),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.blue.withOpacity(0.2),
+                          blurRadius: 20,
+                          spreadRadius: 5,
+                        ),
+                      ],
+                      border: Border.all(
+                        color: Colors.white.withOpacity(0.5),
+                        width: 2,
+                      ),
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // ... existing lock screen UI code ...
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }
