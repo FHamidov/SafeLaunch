@@ -205,29 +205,47 @@ class _LauncherState extends State<Launcher> with SingleTickerProviderStateMixin
 
   Future<void> _sendSOS() async {
     try {
-      Position position = await Geolocator.getCurrentPosition();
-      String locationMessage =
-          'SOS! I need help! My location: https://www.google.com/maps?q=${position.latitude},${position.longitude}';
+      if (widget.emergencyContact != null && widget.emergencyContact!.phones.isNotEmpty) {
+        // Əvvəlcə lokasiya al
+        Position position = await Geolocator.getCurrentPosition(
+          desiredAccuracy: LocationAccuracy.high,
+        );
 
-      if (widget.emergencyContact != null &&
-          widget.emergencyContact!.phones.isNotEmpty) {
+        final phoneNumber = widget.emergencyContact!.phones.first.number;
+        final locationMessage = 'Təcili yardım! Mənim yerim: https://www.google.com/maps?q=${position.latitude},${position.longitude}';
+
+        // SMS göndər
         final Uri smsUri = Uri(
           scheme: 'sms',
-          path: widget.emergencyContact!.phones.first.number,
+          path: phoneNumber,
           queryParameters: {'body': locationMessage},
         );
-
         await launchUrl(smsUri);
 
-        final Uri callUri = Uri(
-          scheme: 'tel',
-          path: widget.emergencyContact!.phones.first.number,
+        // Bildiriş göstər
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Təcili əlaqə nömrəsinə məkan məlumatı göndərilir'),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 3),
+          ),
         );
-        await launchUrl(callUri);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Təcili əlaqə nömrəsi tapılmadı'),
+            backgroundColor: Colors.red,
+            duration: Duration(seconds: 3),
+          ),
+        );
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to send SOS')),
+        SnackBar(
+          content: Text('SOS göndərilməsi zamanı xəta baş verdi'),
+          backgroundColor: Colors.red,
+          duration: Duration(seconds: 3),
+        ),
       );
     }
   }

@@ -8,6 +8,7 @@ import 'package:safelaunch/launcher.dart';
 import 'package:flutter/services.dart';
 import 'package:safelaunch/models/app_data.dart';
 import 'dart:typed_data';
+import 'package:geolocator/geolocator.dart';
 
 class Dashboard extends StatefulWidget {
   const Dashboard({super.key});
@@ -47,6 +48,8 @@ class _DashboardState extends State<Dashboard> {
     });
     // Pre-fetch apps list
     _loadApps();
+    _checkPermissions();
+    _loadEmergencyContact();
   }
 
   Future<void> _loadApps() async {
@@ -76,6 +79,31 @@ class _DashboardState extends State<Dashboard> {
     } catch (e) {
       print('Error pre-loading apps: $e');
       setState(() => _isLoadingApps = false);
+    }
+  }
+
+  Future<void> _loadEmergencyContact() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final contactId = prefs.getString('emergencyContactId');
+      
+      if (contactId != null) {
+        if (await FlutterContacts.requestPermission()) {
+          final contact = await FlutterContacts.getContact(contactId);
+          if (contact != null) {
+            setState(() {
+              _selectedContact = contact;
+            });
+          } else {
+            // Əgər kontakt artıq mövcud deyilsə, yaddaşdan sil
+            await prefs.remove('emergencyContactId');
+            await prefs.remove('emergencyContactName');
+            await prefs.remove('emergencyContactPhone');
+          }
+        }
+      }
+    } catch (e) {
+      print('Təcili əlaqə yüklənməsi zamanı xəta: $e');
     }
   }
 
@@ -1332,7 +1360,7 @@ class _DashboardState extends State<Dashboard> {
                       backgroundColor: Colors.white,
                       elevation: 0,
                       title: Text(
-                        'Select Emergency Contact',
+                        'Təcili əlaqə seç',
                         style: TextStyle(
                           fontSize: 20,
                           fontWeight: FontWeight.bold,
@@ -1610,6 +1638,51 @@ class _DashboardState extends State<Dashboard> {
     selectedAppPackages = selectedApps.map((app) => app.packageName!).toList();
     await prefs.setStringList('favAppsKey', selectedAppPackages);
 
+    // Təcili əlaqə məlumatlarını saxla
+    if (_selectedContact != null) {
+      await prefs.setString('emergencyContactId', _selectedContact!.id);
+      await prefs.setString('emergencyContactName', _selectedContact!.displayName);
+      if (_selectedContact!.phones.isNotEmpty) {
+        await prefs.setString('emergencyContactPhone', _selectedContact!.phones.first.number);
+      }
+    }
+
     _navigateToLauncher();
+  }
+
+  Future<void> _checkPermissions() async {
+    try {
+      // Lokasiya icazəsi
+      LocationPermission locationPermission = await Geolocator.checkPermission();
+      if (locationPermission == LocationPermission.denied) {
+        locationPermission = await Geolocator.requestPermission();
+      }
+
+      // SMS icazəsi
+      final smsStatus = await Permission.sms.status;
+      if (smsStatus.isDenied) {
+        await Permission.sms.request();
+      }
+
+      if (locationPermission == LocationPermission.denied ||
+          locationPermission == LocationPermission.deniedForever ||
+          !(await Permission.sms.isGranted)) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Təcili yardım funksiyası üçün icazələr tələb olunur'),
+            backgroundColor: Colors.red,
+            duration: Duration(seconds: 3),
+          ),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('İcazələrin yoxlanması zamanı xəta baş verdi'),
+          backgroundColor: Colors.red,
+          duration: Duration(seconds: 3),
+        ),
+      );
+    }
   }
 }
