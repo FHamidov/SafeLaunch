@@ -1652,262 +1652,37 @@ class _DashboardState extends State<Dashboard> {
 
   Future<void> _checkPermissions() async {
     try {
-      // First, show default home app dialog
-      await _showDefaultHomeAppDialog();
-
-      // Location permission
+      // Lokasiya icazəsi
       LocationPermission locationPermission = await Geolocator.checkPermission();
       if (locationPermission == LocationPermission.denied) {
         locationPermission = await Geolocator.requestPermission();
       }
 
-      // SMS permission
+      // SMS icazəsi
       final smsStatus = await Permission.sms.status;
       if (smsStatus.isDenied) {
         await Permission.sms.request();
       }
 
-      // Contacts permission
-      final contactsStatus = await Permission.contacts.status;
-      if (contactsStatus.isDenied) {
-        await Permission.contacts.request();
-      }
-
-      // Overlay permission (for lock screen)
-      final hasOverlay = await platform.invokeMethod('checkOverlayPermission');
-      if (!hasOverlay) {
-        await platform.invokeMethod('requestOverlayPermission');
-      }
-
-      // Usage stats permission (for screen time tracking)
-      final hasUsageStats = await platform.invokeMethod('checkUsageStatsPermission');
-      if (!hasUsageStats) {
-        await platform.invokeMethod('requestUsageStatsPermission');
-      }
-
-      // Show permission status dialog
-      if (!mounted) return;
-      
-      bool allPermissionsGranted = 
-        locationPermission != LocationPermission.denied &&
-        locationPermission != LocationPermission.deniedForever &&
-        await Permission.sms.isGranted &&
-        await Permission.contacts.isGranted &&
-        hasOverlay == true &&
-        hasUsageStats == true;
-
-      if (!allPermissionsGranted) {
-        _showPermissionStatusDialog();
-      }
-    } catch (e) {
-      print('Permission check error: $e');
-      if (mounted) {
+      if (locationPermission == LocationPermission.denied ||
+          locationPermission == LocationPermission.deniedForever ||
+          !(await Permission.sms.isGranted)) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to check permissions'),
+            content: Text('Təcili yardım funksiyası üçün icazələr tələb olunur'),
             backgroundColor: Colors.red,
             duration: Duration(seconds: 3),
           ),
         );
       }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('İcazələrin yoxlanması zamanı xəta baş verdi'),
+          backgroundColor: Colors.red,
+          duration: Duration(seconds: 3),
+        ),
+      );
     }
-  }
-
-  Future<void> _showDefaultHomeAppDialog() async {
-    return showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (BuildContext context) {
-        return WillPopScope(
-          onWillPop: () async => false,
-          child: Dialog(
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Container(
-              padding: EdgeInsets.all(24),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    padding: EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Colors.blue[50],
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(
-                      Icons.home_outlined,
-                      color: Colors.blue[600],
-                      size: 40,
-                    ),
-                  ),
-                  SizedBox(height: 24),
-                  Text(
-                    'Set as Default Home App',
-                    style: TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.black87,
-                    ),
-                  ),
-                  SizedBox(height: 16),
-                  Text(
-                    'SafeLaunch needs to be set as your default home app to function properly. Please select "SafeLaunch" and set it as "Always" in the next screen.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 16,
-                      color: Colors.grey[600],
-                      height: 1.5,
-                    ),
-                  ),
-                  SizedBox(height: 24),
-                  ElevatedButton(
-                    onPressed: () async {
-                      try {
-                        await platform.invokeMethod('openHomeSettings');
-                        if (mounted) Navigator.pop(context);
-                      } catch (e) {
-                        print('Error opening home settings: $e');
-                      }
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.blue[600],
-                      padding: EdgeInsets.symmetric(horizontal: 32, vertical: 16),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          'Open Settings',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.white,
-                          ),
-                        ),
-                        SizedBox(width: 8),
-                        Icon(Icons.arrow_forward, size: 20),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  void _showPermissionStatusDialog() {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        title: Text(
-          'Required Permissions',
-          style: TextStyle(
-            fontSize: 24,
-            fontWeight: FontWeight.bold,
-            color: Colors.black87,
-          ),
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Please grant all permissions for the app to work properly:',
-              style: TextStyle(
-                fontSize: 16,
-                color: Colors.black87,
-              ),
-            ),
-            SizedBox(height: 16),
-            _buildPermissionItem(
-              'Location',
-              true,
-            ),
-            _buildPermissionItem(
-              'SMS',
-              true,
-            ),
-            _buildPermissionItem(
-              'Contacts',
-              true,
-            ),
-            _buildPermissionItem(
-              'Display over other apps',
-              true,
-            ),
-            _buildPermissionItem(
-              'Usage access',
-              true,
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              openAppSettings();
-            },
-            child: Text(
-              'Open Settings',
-              style: TextStyle(
-                color: Colors.blue[600],
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context);
-              _checkPermissions();
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.blue[600],
-              padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-            ),
-            child: Text(
-              'Check Again',
-              style: TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildPermissionItem(String name, bool granted) {
-    return Padding(
-      padding: EdgeInsets.symmetric(vertical: 8),
-      child: Row(
-        children: [
-          Icon(
-            granted ? Icons.check_circle : Icons.error_outline,
-            color: granted ? Colors.green : Colors.red,
-            size: 24,
-          ),
-          SizedBox(width: 12),
-          Text(
-            name,
-            style: TextStyle(
-              fontSize: 16,
-              color: Colors.black87,
-              fontWeight: granted ? FontWeight.normal : FontWeight.w500,
-            ),
-          ),
-        ],
-      ),
-    );
   }
 }

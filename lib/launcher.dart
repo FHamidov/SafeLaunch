@@ -67,22 +67,9 @@ class _LauncherState extends State<Launcher> with SingleTickerProviderStateMixin
     _groupAppsByLetter();
     _initPrefs();
     _currentTime = DateTime.now();
-    _loadSavedTime();
+    _remainingMinutes = widget.hours * 60 + widget.minutes;
     
-    // Check permissions
-    _checkPermissions();
-
-    _slideController = AnimationController(
-      vsync: this,
-      duration: Duration(milliseconds: 400),
-    );
-    _slideAnimation = CurvedAnimation(
-      parent: _slideController,
-      curve: Curves.easeOutExpo,
-      reverseCurve: Curves.easeInExpo,
-    );
-
-    // Start timer
+    // Hər dəqiqə vaxtı yoxla
     _timer = Timer.periodic(Duration(minutes: 1), (timer) {
       setState(() {
         _currentTime = DateTime.now();
@@ -96,6 +83,19 @@ class _LauncherState extends State<Launcher> with SingleTickerProviderStateMixin
         }
       });
     });
+
+    // İcazələri yoxla
+    _checkUsageStatsPermission();
+
+    _slideController = AnimationController(
+      vsync: this,
+      duration: Duration(milliseconds: 400),
+    );
+    _slideAnimation = CurvedAnimation(
+      parent: _slideController,
+      curve: Curves.easeOutExpo,
+      reverseCurve: Curves.easeInExpo,
+    );
   }
 
   @override
@@ -901,46 +901,19 @@ class _LauncherState extends State<Launcher> with SingleTickerProviderStateMixin
     });
   }
 
-  Future<void> _checkPermissions() async {
+  Future<void> _checkUsageStatsPermission() async {
     try {
-      // Check overlay permission
-      final hasOverlay = await platform.invokeMethod('checkOverlayPermission');
-      if (!hasOverlay) {
-        await platform.invokeMethod('requestOverlayPermission');
-      }
-
-      // Check usage stats permission
-      final hasUsageStats = await platform.invokeMethod('checkUsageStatsPermission');
-      if (!hasUsageStats) {
+      final hasPermission = await platform.invokeMethod('checkUsageStatsPermission');
+      if (!hasPermission) {
         await platform.invokeMethod('requestUsageStatsPermission');
       }
     } catch (e) {
-      print('Permission check error: $e');
-    }
-  }
-
-  Future<void> _loadSavedTime() async {
-    final prefs = await SharedPreferences.getInstance();
-    final savedMinutes = prefs.getInt('remainingMinutes');
-    final wasLocked = prefs.getBool('isLocked') ?? false;
-    
-    if (savedMinutes != null) {
-      setState(() {
-        _remainingMinutes = savedMinutes;
-        if (wasLocked || savedMinutes <= 0) {
-          _lockScreen();
-        }
-      });
-    } else {
-      setState(() {
-        _remainingMinutes = widget.hours * 60 + widget.minutes;
-      });
+      print('Usage stats permission error: $e');
     }
   }
 
   Future<void> _updateRemainingTime() async {
     await _prefs.setInt('remainingMinutes', _remainingMinutes);
-    await _prefs.setBool('isLocked', _isLocked);
   }
 
   void _lockScreen() {
@@ -952,199 +925,98 @@ class _LauncherState extends State<Launcher> with SingleTickerProviderStateMixin
     showDialog(
       context: context,
       barrierDismissible: false,
-      barrierColor: Colors.black,
-      useSafeArea: false,
-      builder: (context) => PopScope(
-        canPop: false,
-        child: WillPopScope(
-          onWillPop: () async => false,
-          child: TweenAnimationBuilder(
-            duration: Duration(milliseconds: 800),
-            tween: Tween<double>(begin: 0, end: 1),
-            builder: (context, double value, child) {
-              return Transform.scale(
-                scale: 0.95 + (0.05 * value),
-                child: Opacity(
-                  opacity: value,
-                  child: BackdropFilter(
-                    filter: ImageFilter.blur(sigmaX: 10 * value, sigmaY: 10 * value),
-                    child: Dialog(
-                      backgroundColor: Colors.transparent,
-                      elevation: 0,
-                      insetPadding: EdgeInsets.zero,
-                      child: Container(
-                        width: MediaQuery.of(context).size.width,
-                        height: MediaQuery.of(context).size.height,
-                        color: Colors.black.withOpacity(0.3),
-                        child: Center(
-                          child: Container(
-                            margin: EdgeInsets.symmetric(horizontal: 24),
-                            padding: EdgeInsets.all(24),
-                            decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.95),
-                              borderRadius: BorderRadius.circular(30),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.blue.withOpacity(0.2),
-                                  blurRadius: 20,
-                                  spreadRadius: 5,
-                                ),
-                              ],
-                              border: Border.all(
-                                color: Colors.white.withOpacity(0.5),
-                                width: 2,
-                              ),
-                            ),
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                TweenAnimationBuilder(
-                                  duration: Duration(milliseconds: 1200),
-                                  tween: Tween<double>(begin: 0, end: 1),
-                                  builder: (context, double value, child) {
-                                    return Transform.scale(
-                                      scale: 0.8 + (0.2 * value),
-                                      child: child,
-                                    );
-                                  },
-                                  child: Stack(
-                                    alignment: Alignment.center,
-                                    children: [
-                                      Container(
-                                        width: 80,
-                                        height: 80,
-                                        decoration: BoxDecoration(
-                                          color: Colors.blue.withOpacity(0.1),
-                                          shape: BoxShape.circle,
-                                        ),
-                                      ),
-                                      Container(
-                                        width: 60,
-                                        height: 60,
-                                        decoration: BoxDecoration(
-                                          color: Colors.blue.withOpacity(0.2),
-                                          shape: BoxShape.circle,
-                                        ),
-                                      ),
-                                      Icon(
-                                        Icons.timer_off_outlined,
-                                        size: 40,
-                                        color: Colors.blue[600],
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                SizedBox(height: 24),
-                                ShaderMask(
-                                  shaderCallback: (bounds) => LinearGradient(
-                                    colors: [Colors.blue, Colors.purple],
-                                  ).createShader(bounds),
-                                  child: Text(
-                                    'Time is Up!',
-                                    style: TextStyle(
-                                      fontSize: 32,
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.white,
-                                    ),
-                                  ),
-                                ),
-                                SizedBox(height: 12),
-                                Text(
-                                  'Take a break and do something fun!',
-                                  textAlign: TextAlign.center,
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    color: Colors.grey[600],
-                                    height: 1.5,
-                                  ),
-                                ),
-                                SizedBox(height: 32),
-                                Container(
-                                  decoration: BoxDecoration(
-                                    gradient: LinearGradient(
-                                      colors: [Colors.blue.shade100, Colors.purple.shade100],
-                                      begin: Alignment.topLeft,
-                                      end: Alignment.bottomRight,
-                                    ),
-                                    borderRadius: BorderRadius.circular(16),
-                                  ),
-                                  padding: EdgeInsets.all(2),
-                                  child: TextField(
-                                    obscureText: true,
-                                    textAlign: TextAlign.center,
-                                    style: TextStyle(fontSize: 20),
-                                    decoration: InputDecoration(
-                                      hintText: '••••••',
-                                      border: OutlineInputBorder(
-                                        borderRadius: BorderRadius.circular(15),
-                                        borderSide: BorderSide.none,
-                                      ),
-                                      filled: true,
-                                      fillColor: Colors.white,
-                                      contentPadding: EdgeInsets.symmetric(
-                                        horizontal: 20,
-                                        vertical: 16,
-                                      ),
-                                    ),
-                                    onChanged: (value) {
-                                      _enteredPassword = value;
-                                    },
-                                    onSubmitted: _checkPassword,
-                                  ),
-                                ),
-                                SizedBox(height: 20),
-                                TweenAnimationBuilder(
-                                  duration: Duration(milliseconds: 1000),
-                                  tween: Tween<double>(begin: 0, end: 1),
-                                  builder: (context, double value, child) {
-                                    return Transform.translate(
-                                      offset: Offset(0, 20 * (1 - value)),
-                                      child: Opacity(
-                                        opacity: value,
-                                        child: child,
-                                      ),
-                                    );
-                                  },
-                                  child: ElevatedButton(
-                                    onPressed: () => _checkPassword(_enteredPassword),
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: Colors.blue[600],
-                                      padding: EdgeInsets.symmetric(
-                                        horizontal: 40,
-                                        vertical: 16,
-                                      ),
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(16),
-                                      ),
-                                      elevation: 4,
-                                      shadowColor: Colors.blue.withOpacity(0.5),
-                                    ),
-                                    child: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Text(
-                                          'Unlock',
-                                          style: TextStyle(
-                                            fontSize: 18,
-                                            fontWeight: FontWeight.w600,
-                                          ),
-                                        ),
-                                        SizedBox(width: 8),
-                                        Icon(Icons.lock_open_rounded, size: 20),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
+      builder: (context) => WillPopScope(
+        onWillPop: () async => false,
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+          child: Dialog(
+            backgroundColor: Colors.transparent,
+            elevation: 0,
+            child: Container(
+              padding: EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.9),
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.2),
+                    blurRadius: 20,
+                    spreadRadius: 5,
+                  ),
+                ],
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.lock_outline,
+                    size: 48,
+                    color: Colors.blue[600],
+                  ),
+                  SizedBox(height: 16),
+                  Text(
+                    'Time is up!',
+                    style: TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black87,
+                    ),
+                  ),
+                  SizedBox(height: 8),
+                  Text(
+                    'Enter password to continue',
+                    style: TextStyle(
+                      fontSize: 16,
+                      color: Colors.grey[600],
+                    ),
+                  ),
+                  SizedBox(height: 24),
+                  TextField(
+                    obscureText: true,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 20),
+                    decoration: InputDecoration(
+                      hintText: '••••••',
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide.none,
+                      ),
+                      filled: true,
+                      fillColor: Colors.grey[200],
+                      contentPadding: EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 16,
+                      ),
+                    ),
+                    onChanged: (value) {
+                      _enteredPassword = value;
+                    },
+                    onSubmitted: _checkPassword,
+                  ),
+                  SizedBox(height: 16),
+                  ElevatedButton(
+                    onPressed: () => _checkPassword(_enteredPassword),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.blue[600],
+                      padding: EdgeInsets.symmetric(
+                        horizontal: 32,
+                        vertical: 12,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    child: Text(
+                      'Confirm',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                   ),
-                ),
-              );
-            },
+                ],
+              ),
+            ),
           ),
         ),
       ),
@@ -1158,7 +1030,7 @@ class _LauncherState extends State<Launcher> with SingleTickerProviderStateMixin
         _remainingMinutes = widget.hours * 60 + widget.minutes;
         _updateRemainingTime();
       });
-      Navigator.of(context, rootNavigator: true).pop();
+      Navigator.of(context).pop();
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -1173,19 +1045,7 @@ class _LauncherState extends State<Launcher> with SingleTickerProviderStateMixin
   @override
   Widget build(BuildContext context) {
     if (_isLocked) {
-      return WillPopScope(
-        onWillPop: () async => false,
-        child: Scaffold(
-          resizeToAvoidBottomInset: false,
-          body: PopScope(
-            canPop: false,
-            child: Container(
-              color: Colors.black,
-              child: _buildLockScreen(),
-            ),
-          ),
-        ),
-      );
+      return Container(color: Colors.black);
     }
     return Scaffold(
       body: GestureDetector(
@@ -1405,53 +1265,6 @@ class _LauncherState extends State<Launcher> with SingleTickerProviderStateMixin
           ),
         ),
       ),
-    );
-  }
-
-  Widget _buildLockScreen() {
-    return TweenAnimationBuilder(
-      duration: Duration(milliseconds: 800),
-      tween: Tween<double>(begin: 0, end: 1),
-      builder: (context, double value, child) {
-        return Transform.scale(
-          scale: 0.95 + (0.05 * value),
-          child: Opacity(
-            opacity: value,
-            child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 10 * value, sigmaY: 10 * value),
-              child: Container(
-                padding: EdgeInsets.all(24),
-                child: Center(
-                  child: Container(
-                    padding: EdgeInsets.all(24),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.95),
-                      borderRadius: BorderRadius.circular(30),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.blue.withOpacity(0.2),
-                          blurRadius: 20,
-                          spreadRadius: 5,
-                        ),
-                      ],
-                      border: Border.all(
-                        color: Colors.white.withOpacity(0.5),
-                        width: 2,
-                      ),
-                    ),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        // ... existing lock screen UI code ...
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        );
-      },
     );
   }
 }
