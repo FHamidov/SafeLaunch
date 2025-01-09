@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:ui';
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_contacts/flutter_contacts.dart';
@@ -65,13 +66,36 @@ class _LauncherState extends State<Launcher> with SingleTickerProviderStateMixin
     _allApps.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
     _favoriteApps = widget.preloadedFavoriteApps;
     _groupAppsByLetter();
-    _initPrefs();
+    
+    // Initialize everything
+    _initializeApp();
+    
+    // İcazələri yoxla
+    _checkUsageStatsPermission();
+
+    _slideController = AnimationController(
+      vsync: this,
+      duration: Duration(milliseconds: 400),
+    );
+    _slideAnimation = CurvedAnimation(
+      parent: _slideController,
+      curve: Curves.easeOutExpo,
+      reverseCurve: Curves.easeInExpo,
+    );
+  }
+
+  Future<void> _initializeApp() async {
+    _prefs = await SharedPreferences.getInstance();
     _currentTime = DateTime.now();
     
-    // Load remaining time from SharedPreferences
-    _loadRemainingTime();
+    // Load and check remaining time
+    await _loadRemainingTime();
     
-    // Hər dəqiqə vaxtı yoxla
+    // Start timer after loading time
+    _startTimer();
+  }
+
+  void _startTimer() {
     _timer = Timer.periodic(Duration(minutes: 1), (timer) {
       setState(() {
         _currentTime = DateTime.now();
@@ -86,19 +110,36 @@ class _LauncherState extends State<Launcher> with SingleTickerProviderStateMixin
         }
       });
     });
+  }
 
-    // İcazələri yoxla
-    _checkUsageStatsPermission();
+  // Load remaining time from SharedPreferences
+  Future<void> _loadRemainingTime() async {
+    final lastResetDate = _prefs.getString('lastResetDate');
+    final now = DateTime.now();
+    final today = DateFormat('yyyy-MM-dd').format(now);
+    
+    // Əgər son sıfırlama tarixi bu gün deyilsə, vaxtı sıfırla
+    if (lastResetDate != today) {
+      _remainingMinutes = widget.hours * 60 + widget.minutes;
+      await _prefs.setString('lastResetDate', today);
+      await _prefs.setInt('remainingMinutes', _remainingMinutes);
+    } else {
+      // Əks halda saxlanılmış vaxtı yüklə
+      _remainingMinutes = _prefs.getInt('remainingMinutes') ?? (widget.hours * 60 + widget.minutes);
+    }
 
-    _slideController = AnimationController(
-      vsync: this,
-      duration: Duration(milliseconds: 400),
-    );
-    _slideAnimation = CurvedAnimation(
-      parent: _slideController,
-      curve: Curves.easeOutExpo,
-      reverseCurve: Curves.easeInExpo,
-    );
+    // Əgər qalan vaxt 0-dırsa və ya 0-dan kiçikdirsə, ekranı kilidlə
+    if (_remainingMinutes <= 0) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _lockScreen();
+      });
+    }
+    
+    setState(() {});
+  }
+
+  Future<void> _updateRemainingTime() async {
+    await _prefs.setInt('remainingMinutes', _remainingMinutes);
   }
 
   @override
@@ -915,113 +956,264 @@ class _LauncherState extends State<Launcher> with SingleTickerProviderStateMixin
     }
   }
 
-  Future<void> _updateRemainingTime() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setInt('remainingMinutes', _remainingMinutes);
-  }
-
   void _lockScreen() {
     setState(() {
       _isLocked = true;
       _enteredPassword = '';
     });
     
+    if (!mounted) return;
+    
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (context) => WillPopScope(
         onWillPop: () async => false,
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-          child: Dialog(
-            backgroundColor: Colors.transparent,
-            elevation: 0,
-            child: Container(
-              padding: EdgeInsets.all(24),
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.9),
-                borderRadius: BorderRadius.circular(20),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.2),
-                    blurRadius: 20,
-                    spreadRadius: 5,
-                  ),
-                ],
+        child: TweenAnimationBuilder(
+          duration: Duration(milliseconds: 800),
+          tween: Tween<double>(begin: 0, end: 1),
+          builder: (context, double value, child) {
+            return BackdropFilter(
+              filter: ImageFilter.blur(
+                sigmaX: 10 * value,
+                sigmaY: 10 * value,
               ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    Icons.lock_outline,
-                    size: 48,
-                    color: Colors.blue[600],
-                  ),
-                  SizedBox(height: 16),
-                  Text(
-                    'Time is up!',
-                    style: TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.black87,
+              child: Dialog(
+                backgroundColor: Colors.transparent,
+                elevation: 0,
+                child: Container(
+                  padding: EdgeInsets.all(24),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.95),
+                    borderRadius: BorderRadius.circular(30),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.blue.withOpacity(0.2),
+                        blurRadius: 20,
+                        spreadRadius: 5,
+                      ),
+                    ],
+                    border: Border.all(
+                      color: Colors.blue.withOpacity(0.3),
+                      width: 2,
                     ),
                   ),
-                  SizedBox(height: 8),
-                  Text(
-                    'Enter password to continue',
-                    style: TextStyle(
-                      fontSize: 16,
-                      color: Colors.grey[600],
-                    ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // Animated clock icon with stars
+                      Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          // Rotating stars
+                          ...List.generate(6, (index) {
+                            return TweenAnimationBuilder(
+                              duration: Duration(seconds: 2),
+                              tween: Tween<double>(begin: 0, end: 1),
+                              builder: (context, double value, child) {
+                                return Transform.rotate(
+                                  angle: value * 2 * 3.14 + (index * 1.0),
+                                  child: Transform.translate(
+                                    offset: Offset(50 * cos(index * 1.0), 50 * sin(index * 1.0)),
+                                    child: Icon(
+                                      Icons.star,
+                                      color: Colors.amber,
+                                      size: 20,
+                                    ),
+                                  ),
+                                );
+                              },
+                            );
+                          }),
+                          // Main clock icon
+                          TweenAnimationBuilder(
+                            duration: Duration(seconds: 2),
+                            tween: Tween<double>(begin: 0, end: 1),
+                            builder: (context, double value, child) {
+                              return Transform.rotate(
+                                angle: value * 2 * 3.14,
+                                child: Container(
+                                  width: 80,
+                                  height: 80,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    gradient: LinearGradient(
+                                      colors: [
+                                        Colors.blue[300]!,
+                                        Colors.blue[600]!,
+                                      ],
+                                      begin: Alignment.topLeft,
+                                      end: Alignment.bottomRight,
+                                    ),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.blue.withOpacity(0.3),
+                                        blurRadius: 15,
+                                        spreadRadius: 5,
+                                      ),
+                                    ],
+                                  ),
+                                  child: Icon(
+                                    Icons.timer_off_rounded,
+                                    size: 40,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                        ],
+                      ),
+                      SizedBox(height: 24),
+                      
+                      // Time's Up text
+                      ShaderMask(
+                        shaderCallback: (bounds) => LinearGradient(
+                          colors: [
+                            Colors.blue[400]!,
+                            Colors.purple[400]!,
+                          ],
+                        ).createShader(bounds),
+                        child: Text(
+                          "Time's Up!",
+                          style: TextStyle(
+                            fontSize: 32,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                      
+                      SizedBox(height: 16),
+                      
+                      // Motivation message
+                      Text(
+                        "It's Break Time! 🌟",
+                        style: TextStyle(
+                          fontSize: 18,
+                          color: Colors.grey[600],
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      
+                      SizedBox(height: 32),
+                      
+                      // Password field
+                      Container(
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(20),
+                          gradient: LinearGradient(
+                            colors: [
+                              Colors.blue[50]!,
+                              Colors.purple[50]!,
+                            ],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.1),
+                              blurRadius: 10,
+                              offset: Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: TextField(
+                          obscureText: true,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 24,
+                            letterSpacing: 4,
+                          ),
+                          decoration: InputDecoration(
+                            hintText: '••••••',
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(20),
+                              borderSide: BorderSide.none,
+                            ),
+                            contentPadding: EdgeInsets.symmetric(
+                              horizontal: 24,
+                              vertical: 20,
+                            ),
+                          ),
+                          onChanged: (value) {
+                            _enteredPassword = value;
+                          },
+                          onSubmitted: _checkPassword,
+                        ),
+                      ),
+                      
+                      SizedBox(height: 24),
+                      
+                      // Continue button
+                      TweenAnimationBuilder(
+                        duration: Duration(milliseconds: 500),
+                        tween: Tween<double>(begin: 0.8, end: 1),
+                        builder: (context, double value, child) {
+                          return Transform.scale(
+                            scale: value,
+                            child: Container(
+                              width: double.infinity,
+                              height: 60,
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(20),
+                                gradient: LinearGradient(
+                                  colors: [
+                                    Colors.blue[400]!,
+                                    Colors.blue[700]!,
+                                  ],
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.blue.withOpacity(0.3),
+                                    blurRadius: 10,
+                                    spreadRadius: 2,
+                                    offset: Offset(0, 4),
+                                  ),
+                                ],
+                              ),
+                              child: Material(
+                                color: Colors.transparent,
+                                child: InkWell(
+                                  borderRadius: BorderRadius.circular(20),
+                                  onTap: () => _checkPassword(_enteredPassword),
+                                  child: Center(
+                                    child: Text(
+                                      'Continue',
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.w600,
+                                        letterSpacing: 1,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                      
+                      SizedBox(height: 16),
+                      
+                      // Hint message
+                      Text(
+                        'Ask your parents for the password 🤗',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Colors.grey[500],
+                          fontStyle: FontStyle.italic,
+                        ),
+                      ),
+                    ],
                   ),
-                  SizedBox(height: 24),
-                  TextField(
-                    obscureText: true,
-                    textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 20),
-                    decoration: InputDecoration(
-                      hintText: '••••••',
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide.none,
-                      ),
-                      filled: true,
-                      fillColor: Colors.grey[200],
-                      contentPadding: EdgeInsets.symmetric(
-                        horizontal: 20,
-                        vertical: 16,
-                      ),
-                    ),
-                    onChanged: (value) {
-                      _enteredPassword = value;
-                    },
-                    onSubmitted: _checkPassword,
-                  ),
-                  SizedBox(height: 16),
-                  ElevatedButton(
-                    onPressed: () => _checkPassword(_enteredPassword),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.blue[600],
-                      padding: EdgeInsets.symmetric(
-                        horizontal: 32,
-                        vertical: 12,
-                      ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    child: Text(
-                      'Confirm',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                ],
+                ),
               ),
-            ),
-          ),
+            );
+          },
         ),
       ),
     );
@@ -1044,25 +1236,6 @@ class _LauncherState extends State<Launcher> with SingleTickerProviderStateMixin
         ),
       );
     }
-  }
-
-  // Load remaining time from SharedPreferences
-  Future<void> _loadRemainingTime() async {
-    final prefs = await SharedPreferences.getInstance();
-    final lastResetDate = prefs.getString('lastResetDate');
-    final now = DateTime.now();
-    final today = DateFormat('yyyy-MM-dd').format(now);
-    
-    // Əgər son sıfırlama tarixi bu gün deyilsə, vaxtı sıfırla
-    if (lastResetDate != today) {
-      _remainingMinutes = widget.hours * 60 + widget.minutes;
-      await prefs.setString('lastResetDate', today);
-      await prefs.setInt('remainingMinutes', _remainingMinutes);
-    } else {
-      // Əks halda saxlanılmış vaxtı yüklə
-      _remainingMinutes = prefs.getInt('remainingMinutes') ?? (widget.hours * 60 + widget.minutes);
-    }
-    setState(() {});
   }
 
   @override
