@@ -1720,7 +1720,6 @@ class _DashboardState extends State<Dashboard> {
         await Permission.sms.request();
       }
 
-      
 
       if (locationPermission == LocationPermission.denied ||
           locationPermission == LocationPermission.deniedForever ||
