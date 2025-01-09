@@ -145,27 +145,33 @@ class MainActivity: FlutterActivity() {
 
     private fun openHomeSettings() {
         try {
-            // Default launcher seçimi üçün intent
-            val intent = Intent(Intent.ACTION_MAIN)
-            intent.addCategory(Intent.CATEGORY_HOME)
-            intent.addCategory(Intent.CATEGORY_DEFAULT)
+            // Role management intent for Android 10 and above
+            val roleManager = context.getSystemService(Context.ROLE_SERVICE) as android.app.role.RoleManager
+            if (roleManager.isRoleAvailable(android.app.role.RoleManager.ROLE_HOME) &&
+                !roleManager.isRoleHeld(android.app.role.RoleManager.ROLE_HOME)) {
+                val intent = roleManager.createRequestRoleIntent(android.app.role.RoleManager.ROLE_HOME)
+                startActivity(intent)
+                return
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+
+        try {
+            // For older Android versions
+            val intent = Intent(Settings.ACTION_HOME_SETTINGS)
             intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
             startActivity(intent)
         } catch (e: Exception) {
-            // Əgər birinci üsul işləməsə
             try {
-                val intent = Intent(Settings.ACTION_HOME_SETTINGS)
+                // Alternative method
+                val intent = Intent()
+                intent.action = Settings.ACTION_APPLICATION_DETAILS_SETTINGS
+                intent.data = android.net.Uri.parse("package:" + context.packageName)
                 intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
                 startActivity(intent)
             } catch (e: Exception) {
-                // Əgər ikinci üsul da işləməsə
-                try {
-                    val intent = Intent(Settings.ACTION_SETTINGS)
-                    intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                    startActivity(intent)
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                }
+                e.printStackTrace()
             }
         }
     }
