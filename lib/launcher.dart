@@ -67,12 +67,15 @@ class _LauncherState extends State<Launcher> with SingleTickerProviderStateMixin
     _groupAppsByLetter();
     _initPrefs();
     _currentTime = DateTime.now();
-    _remainingMinutes = widget.hours * 60 + widget.minutes;
+    
+    // Load remaining time from SharedPreferences
+    _loadRemainingTime();
     
     // Hər dəqiqə vaxtı yoxla
     _timer = Timer.periodic(Duration(minutes: 1), (timer) {
       setState(() {
         _currentTime = DateTime.now();
+        
         if (_remainingMinutes > 0) {
           _remainingMinutes--;
           _updateRemainingTime();
@@ -913,7 +916,8 @@ class _LauncherState extends State<Launcher> with SingleTickerProviderStateMixin
   }
 
   Future<void> _updateRemainingTime() async {
-    await _prefs.setInt('remainingMinutes', _remainingMinutes);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt('remainingMinutes', _remainingMinutes);
   }
 
   void _lockScreen() {
@@ -1040,6 +1044,25 @@ class _LauncherState extends State<Launcher> with SingleTickerProviderStateMixin
         ),
       );
     }
+  }
+
+  // Load remaining time from SharedPreferences
+  Future<void> _loadRemainingTime() async {
+    final prefs = await SharedPreferences.getInstance();
+    final lastResetDate = prefs.getString('lastResetDate');
+    final now = DateTime.now();
+    final today = DateFormat('yyyy-MM-dd').format(now);
+    
+    // Əgər son sıfırlama tarixi bu gün deyilsə, vaxtı sıfırla
+    if (lastResetDate != today) {
+      _remainingMinutes = widget.hours * 60 + widget.minutes;
+      await prefs.setString('lastResetDate', today);
+      await prefs.setInt('remainingMinutes', _remainingMinutes);
+    } else {
+      // Əks halda saxlanılmış vaxtı yüklə
+      _remainingMinutes = prefs.getInt('remainingMinutes') ?? (widget.hours * 60 + widget.minutes);
+    }
+    setState(() {});
   }
 
   @override

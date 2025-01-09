@@ -11,10 +11,6 @@ import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 import java.io.ByteArrayOutputStream
-import android.content.Context
-import android.app.AppOpsManager
-import android.provider.Settings
-import android.view.View
 
 class MainActivity: FlutterActivity() {
     private val CHANNEL = "com.example.safelaunch/app_launcher"
@@ -35,12 +31,8 @@ class MainActivity: FlutterActivity() {
                         result.error("INVALID_PACKAGE", "Package name is null", null)
                     }
                 }
-                "checkUsageStatsPermission" -> {
-                    val hasPermission = checkUsageStatsPermission()
-                    result.success(hasPermission)
-                }
-                "requestUsageStatsPermission" -> {
-                    requestUsageStatsPermission()
+                "openHomeSettings" -> {
+                    openHomeSettings()
                     result.success(true)
                 }
                 else -> {
@@ -48,44 +40,6 @@ class MainActivity: FlutterActivity() {
                 }
             }
         }
-    }
-
-    private fun checkUsageStatsPermission(): Boolean {
-        val appOps = getSystemService(Context.APP_OPS_SERVICE) as AppOpsManager
-        val mode = appOps.checkOpNoThrow(
-            AppOpsManager.OPSTR_GET_USAGE_STATS,
-            android.os.Process.myUid(),
-            packageName
-        )
-        return mode == AppOpsManager.MODE_ALLOWED
-    }
-
-    private fun requestUsageStatsPermission() {
-        startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
-    }
-
-    override fun onBackPressed() {
-        // Geri düyməsini deaktiv et
-        return
-    }
-
-    override fun onWindowFocusChanged(hasFocus: Boolean) {
-        super.onWindowFocusChanged(hasFocus)
-        if (hasFocus) {
-            // Tam ekran rejimini məcburi et
-            window.decorView.systemUiVisibility = (View.SYSTEM_UI_FLAG_LAYOUT_STABLE
-                    or View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
-                    or View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
-                    or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
-                    or View.SYSTEM_UI_FLAG_FULLSCREEN
-                    or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY)
-        }
-    }
-
-    override fun onPause() {
-        super.onPause()
-        // Recent apps düyməsini deaktiv et
-        moveTaskToBack(true)
     }
 
     private fun getInstalledApps(): List<Map<String, Any>> {
@@ -96,34 +50,37 @@ class MainActivity: FlutterActivity() {
         val apps = mutableListOf<Map<String, Any>>()
         val resolveInfos = pm.queryIntentActivities(mainIntent, PackageManager.MATCH_ALL)
 
-        // Sistem tətbiqlərini və ayarları filter et
-        val filteredApps = resolveInfos.filter { resolveInfo ->
-            val packageName = resolveInfo.activityInfo.applicationInfo.packageName
-            !packageName.startsWith("com.android.settings") &&
-            !packageName.startsWith("com.google.android.packageinstaller") &&
-            !packageName.contains("settings")
-        }
-
-        filteredApps.forEach { resolveInfo ->
+        // Önce tüm app bilgilerini toplayalım
+        val appsList = resolveInfos.map { resolveInfo ->
             try {
                 val appInfo = resolveInfo.activityInfo.applicationInfo
                 val name = pm.getApplicationLabel(appInfo).toString()
                 val packageName = appInfo.packageName
+                Pair(appInfo, name)
+            } catch (e: Exception) {
+                null
+            }
+        }.filterNotNull()
+        .sortedBy { it.second } // İsimlere göre sırala
+
+        // Sonra ikonları yükleyelim
+        appsList.forEach { (appInfo, name) ->
+            try {
                 val icon = appInfo.loadIcon(pm)
                 val iconBytes = drawableToByteArray(icon)
 
                 val appData = mapOf(
                     "name" to name,
-                    "packageName" to packageName,
+                    "packageName" to appInfo.packageName,
                     "icon" to iconBytes
                 )
                 apps.add(appData)
             } catch (e: Exception) {
-                println("Error loading app: ${e.message}")
+                println("Error loading app icon: ${e.message}")
             }
         }
 
-        return apps.sortedBy { it["name"] as String }
+        return apps
     }
 
     private fun drawableToByteArray(drawable: Drawable): ByteArray {
@@ -157,5 +114,13 @@ class MainActivity: FlutterActivity() {
         } catch (e: Exception) {
             result.error("LAUNCH_ERROR", "Error launching app: ${e.message}", null)
         }
+    }
+
+    private fun openHomeSettings() {
+        val intent = Intent().apply {
+            action = android.provider.Settings.ACTION_HOME_SETTINGS
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK
+        }
+        startActivity(intent)
     }
 }
