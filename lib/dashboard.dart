@@ -1647,7 +1647,63 @@ class _DashboardState extends State<Dashboard> {
       }
     }
 
-    _navigateToLauncher();
+    // Show dialog to set SafeLaunch as default launcher
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: Text('Set SafeLaunch as Default'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'To ensure proper child protection:',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+              ),
+            ),
+            SizedBox(height: 12),
+            Text('1. Click "Continue" below'),
+            Text('2. Select "SafeLaunch" from the list'),
+            Text('3. Choose "Always" to set as default'),
+            SizedBox(height: 16),
+            Text(
+              'This step is required for the app to work properly.',
+              style: TextStyle(
+                color: Colors.red,
+                fontStyle: FontStyle.italic,
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(context);
+              // Open home app settings
+              try {
+                await platform.invokeMethod('openHomeSettings');
+                // Qısa gözləmə əlavə edirik
+                await Future.delayed(Duration(seconds: 2));
+              } catch (e) {
+                print('Error opening home settings: $e');
+              }
+              // Navigate to launcher after settings
+              _navigateToLauncher();
+            },
+            child: Text(
+              'Continue',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _checkPermissions() async {

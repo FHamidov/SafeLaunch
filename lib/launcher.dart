@@ -962,6 +962,9 @@ class _LauncherState extends State<Launcher> with SingleTickerProviderStateMixin
       _enteredPassword = '';
     });
     
+    // Close all recent apps
+    platform.invokeMethod('closeAllApps');
+    
     if (!mounted) return;
     
     showDialog(
@@ -1241,7 +1244,26 @@ class _LauncherState extends State<Launcher> with SingleTickerProviderStateMixin
   @override
   Widget build(BuildContext context) {
     if (_isLocked) {
-      return Container(color: Colors.black);
+      return Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Color(0xFF1A237E),
+              Color(0xFF0D47A1),
+              Color(0xFF01579B),
+            ],
+            stops: [0.0, 0.5, 1.0],
+          ),
+        ),
+        child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+              child: Container(
+                color: Colors.black.withOpacity(0.3),
+              ),
+            ),
+      );
     }
     return Scaffold(
       body: GestureDetector(
