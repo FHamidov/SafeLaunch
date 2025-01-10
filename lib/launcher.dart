@@ -913,6 +913,7 @@ class _LauncherState extends State<Launcher> with SingleTickerProviderStateMixin
               _showAllApps = false;
               _isDragging = false;
               _dragOffset = 0;
+              _selectedLetter = 'A'; // Reset selected letter to A when closing
             });
           }
         });
@@ -934,6 +935,7 @@ class _LauncherState extends State<Launcher> with SingleTickerProviderStateMixin
               _showAllApps = false;
               _isDragging = false;
               _dragOffset = 0;
+              _selectedLetter = 'A'; // Reset selected letter to A when closing
             });
           }
         });
@@ -1252,6 +1254,243 @@ class _LauncherState extends State<Launcher> with SingleTickerProviderStateMixin
     }
   }
 
+  // Parent password dialog
+  void _showParentPasswordDialog() {
+    String enteredPassword = '';
+    
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      barrierColor: Colors.black.withOpacity(0.4),
+      builder: (BuildContext dialogContext) => BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
+        child: Dialog(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          insetPadding: EdgeInsets.symmetric(horizontal: 20),
+          child: Container(
+            constraints: BoxConstraints(maxWidth: 340),
+            padding: EdgeInsets.fromLTRB(24, 32, 24, 24),
+            decoration: BoxDecoration(
+              color: Colors.black.withOpacity(0.7),
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(
+                color: Colors.white.withOpacity(0.1),
+                width: 1,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.purple.withOpacity(0.2),
+                  blurRadius: 30,
+                  spreadRadius: -5,
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Parent Icon with Animation
+                TweenAnimationBuilder(
+                  duration: Duration(milliseconds: 200),
+                  tween: Tween<double>(begin: 0, end: 1),
+                  builder: (context, double value, child) {
+                    return Transform.scale(
+                      scale: value,
+                      child: Container(
+                        width: 64,
+                        height: 64,
+                        padding: EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Colors.white.withOpacity(0.1),
+                          border: Border.all(
+                            color: Colors.white.withOpacity(0.2),
+                            width: 1,
+                          ),
+                        ),
+                        child: Icon(
+                          Icons.lock_outline_rounded,
+                          size: 28,
+                          color: Colors.white.withOpacity(0.9),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+                
+                SizedBox(height: 24),
+                
+                // Title
+                Text(
+                  "Parent Access",
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white.withOpacity(0.9),
+                    letterSpacing: 0.5,
+                  ),
+                ),
+                
+                SizedBox(height: 8),
+                
+                // Subtitle
+                Text(
+                  "Enter password to continue",
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.white.withOpacity(0.5),
+                    letterSpacing: 0.3,
+                  ),
+                ),
+                
+                SizedBox(height: 32),
+                
+                // Password field with animation
+                TweenAnimationBuilder(
+                  duration: Duration(milliseconds: 350),
+                  tween: Tween<double>(begin: 0, end: 1),
+                  builder: (context, double value, child) {
+                    return Transform.scale(
+                      scale: value,
+                      child: Container(
+                        height: 48,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(14),
+                          color: Colors.white.withOpacity(0.08),
+                          border: Border.all(
+                            color: Colors.white.withOpacity(0.1),
+                            width: 1,
+                          ),
+                        ),
+                        child: TextField(
+                          obscureText: true,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 16,
+                            color: Colors.white,
+                            letterSpacing: 3,
+                          ),
+                          cursorColor: Colors.white.withOpacity(0.5),
+                          decoration: InputDecoration(
+                            hintText: '••••••',
+                            hintStyle: TextStyle(
+                              color: Colors.white.withOpacity(0.3),
+                              fontSize: 16,
+                              letterSpacing: 3,
+                            ),
+                            border: InputBorder.none,
+                            contentPadding: EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 12,
+                            ),
+                          ),
+                          onChanged: (value) {
+                            enteredPassword = value;
+                          },
+                          onSubmitted: (value) {
+                            if (value == widget.password) {
+                              Navigator.pop(dialogContext);
+                              // TODO: Add parent settings page navigation
+                            } else {
+                              Navigator.pop(dialogContext);
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('Wrong password'),
+                                  backgroundColor: Colors.redAccent.withOpacity(0.9),
+                                  behavior: SnackBarBehavior.floating,
+                                  margin: EdgeInsets.all(16),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                ),
+                              );
+                              // Show dialog again after error
+                              Future.delayed(Duration(milliseconds: 100), () {
+                                _showParentPasswordDialog();
+                              });
+                            }
+                          },
+                        ),
+                      ),
+                    );
+                  },
+                ),
+                
+                SizedBox(height: 24),
+                
+                // Verify button with animation
+                TweenAnimationBuilder(
+                  duration: Duration(milliseconds: 350),
+                  tween: Tween<double>(begin: 0, end: 1),
+                  builder: (context, double value, child) {
+                    return Transform.scale(
+                      scale: value,
+                      child: Container(
+                        width: double.infinity,
+                        height: 48,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(14),
+                          gradient: LinearGradient(
+                            colors: [
+                              Color(0xFF2196F3).withOpacity(0.8), // Light Blue
+                              Color(0xFF1976D2).withOpacity(0.8), // Dark Blue
+                            ],
+                            begin: Alignment.centerLeft,
+                            end: Alignment.centerRight,
+                          ),
+                        ),
+                        child: Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(14),
+                            onTap: () {
+                              if (enteredPassword == widget.password) {
+                                Navigator.pop(dialogContext);
+                                // TODO: Add parent settings page navigation
+                              } else {
+                                Navigator.pop(dialogContext);
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text('Wrong password'),
+                                    backgroundColor: Colors.redAccent.withOpacity(0.9),
+                                    behavior: SnackBarBehavior.floating,
+                                    margin: EdgeInsets.all(16),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                  ),
+                                );
+                                // Show dialog again after error
+                                Future.delayed(Duration(milliseconds: 100), () {
+                                  _showParentPasswordDialog();
+                                });
+                              }
+                            },
+                            child: Center(
+                              child: Text(
+                                'Verify',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w600,
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_isLocked) {
@@ -1478,10 +1717,17 @@ class _LauncherState extends State<Launcher> with SingleTickerProviderStateMixin
                               color: Colors.white24,
                               shape: BoxShape.circle,
                             ),
-                            child: Icon(
-                              Icons.family_restroom,
-                              color: Colors.white,
-                              size: 28,
+                            child: Material(
+                              color: Colors.transparent,
+                              child: InkWell(
+                                onTap: _showParentPasswordDialog,
+                                customBorder: CircleBorder(),
+                                child: Icon(
+                                  Icons.family_restroom,
+                                  color: Colors.white,
+                                  size: 28,
+                                ),
+                              ),
                             ),
                           ),
                         ],
