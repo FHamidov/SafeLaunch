@@ -1,16 +1,11 @@
 package com.example.app
 
-import android.app.ActivityManager
-import android.app.AppOpsManager
-import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
-import android.os.Process
-import android.provider.Settings
 import androidx.annotation.NonNull
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -25,25 +20,19 @@ class MainActivity: FlutterActivity() {
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL).setMethodCallHandler { call, result ->
             when (call.method) {
                 "getInstalledApps" -> {
-                    result.success(getInstalledApps())
+                    val apps = getInstalledApps()
+                    result.success(apps)
                 }
                 "launchApp" -> {
                     val packageName = call.argument<String>("packageName")
                     if (packageName != null) {
                         launchApp(packageName, result)
                     } else {
-                        result.error("INVALID_PACKAGE", "Package name is required", null)
+                        result.error("INVALID_PACKAGE", "Package name is null", null)
                     }
                 }
-                "checkUsageStatsPermission" -> {
-                    result.success(checkUsageStatsPermission())
-                }
-                "requestUsageStatsPermission" -> {
-                    requestUsageStatsPermission()
-                    result.success(null)
-                }
-                "closeAllApps" -> {
-                    closeAllRecentApps()
+                "openHomeSettings" -> {
+                    openHomeSettings()
                     result.success(true)
                 }
                 else -> {
@@ -51,22 +40,6 @@ class MainActivity: FlutterActivity() {
                 }
             }
         }
-    }
-
-    private fun checkUsageStatsPermission(): Boolean {
-        val appOps = context.getSystemService(Context.APP_OPS_SERVICE) as AppOpsManager
-        val mode = appOps.checkOpNoThrow(
-            AppOpsManager.OPSTR_GET_USAGE_STATS,
-            Process.myUid(),
-            context.packageName
-        )
-        return mode == AppOpsManager.MODE_ALLOWED
-    }
-
-    private fun requestUsageStatsPermission() {
-        val intent = Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)
-        intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
-        startActivity(intent)
     }
 
     private fun getInstalledApps(): List<Map<String, Any>> {
@@ -144,77 +117,10 @@ class MainActivity: FlutterActivity() {
     }
 
     private fun openHomeSettings() {
-        try {
-            // Role management intent for Android 10 and above
-            val roleManager = context.getSystemService(Context.ROLE_SERVICE) as android.app.role.RoleManager
-            if (roleManager.isRoleAvailable(android.app.role.RoleManager.ROLE_HOME) &&
-                !roleManager.isRoleHeld(android.app.role.RoleManager.ROLE_HOME)) {
-                val intent = roleManager.createRequestRoleIntent(android.app.role.RoleManager.ROLE_HOME)
-                startActivity(intent)
-                return
-            }
-        } catch (e: Exception) {
-            e.printStackTrace()
+        val intent = Intent().apply {
+            action = android.provider.Settings.ACTION_HOME_SETTINGS
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK
         }
-
-        try {
-            // For older Android versions
-            val intent = Intent(Settings.ACTION_HOME_SETTINGS)
-            intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
-            startActivity(intent)
-        } catch (e: Exception) {
-            try {
-                // Alternative method
-                val intent = Intent()
-                intent.action = Settings.ACTION_APPLICATION_DETAILS_SETTINGS
-                intent.data = android.net.Uri.parse("package:" + context.packageName)
-                intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                startActivity(intent)
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
-        }
-    }
-
-    private fun closeAllRecentApps() {
-        try {
-            val activityManager = getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
-            val ourPackageName = context.packageName
-            
-            // Əvvəlcə HOME ekranına keçirik
-            val homeIntent = Intent(Intent.ACTION_MAIN)
-            homeIntent.addCategory(Intent.CATEGORY_HOME)
-            homeIntent.setPackage(ourPackageName)
-            homeIntent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
-            startActivity(homeIntent)
-
-            // Bütün arxa plan proseslərini bağlayırıq (bizim app xaric)
-            val runningProcesses = activityManager.runningAppProcesses
-            runningProcesses?.forEach { processInfo ->
-                if (processInfo.processName != ourPackageName) {
-                    activityManager.killBackgroundProcesses(processInfo.processName)
-                }
-            }
-
-            // Recent apps siyahısını təmizləyirik
-            val recentsIntent = Intent("com.android.systemui.recent.action.TOGGLE_RECENTS")
-            recentsIntent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
-            try {
-                startActivity(recentsIntent)
-                // Qısa gözləmə
-                Thread.sleep(100)
-                // Recent apps-ı bağlayırıq
-                val closeIntent = Intent("com.android.systemui.recent.action.TOGGLE_RECENTS")
-                closeIntent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                startActivity(closeIntent)
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
-
-            // Yenidən HOME ekranına qayıdırıq
-            startActivity(homeIntent)
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
+        startActivity(intent)
     }
 }

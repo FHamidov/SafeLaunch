@@ -1647,63 +1647,43 @@ class _DashboardState extends State<Dashboard> {
       }
     }
 
-    // Show dialog to set SafeLaunch as default launcher
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        title: Text('Set SafeLaunch as Default'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'To ensure proper child protection:',
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 16,
-              ),
-            ),
-            SizedBox(height: 12),
-            Text('1. Click "Continue" below'),
-            Text('2. Select "SafeLaunch" from the list'),
-            Text('3. Choose "Always" to set as default'),
-            SizedBox(height: 16),
-            Text(
-              'This step is required for the app to work properly.',
-              style: TextStyle(
-                color: Colors.red,
-                fontStyle: FontStyle.italic,
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () async {
-              Navigator.pop(context);
-              // Open home app settings
-              try {
-                await platform.invokeMethod('openHomeSettings');
-                // Qısa gözləmə əlavə edirik
-                await Future.delayed(Duration(seconds: 2));
-              } catch (e) {
-                print('Error opening home settings: $e');
-              }
-              // Navigate to launcher after settings
-              _navigateToLauncher();
-            },
-            child: Text(
-              'Continue',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
+    // Open home settings and wait for result
+    try {
+      await platform.invokeMethod('openHomeSettings');
+      // Wait for the home settings to be shown
+      await Future.delayed(Duration(seconds: 3));
+      
+      if (!mounted) return;
+      
+      // Now navigate to launcher
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (context) => Launcher(
+            hours: _hours,
+            minutes: _minutes,
+            password: _password,
+            emergencyContact: _selectedContact,
+            selectedAppPackages: selectedAppPackages,
+            preloadedAllApps: _cachedApps!.map((app) => AppData(
+              name: app.name ?? '',
+              packageName: app.packageName ?? '',
+              icon: app.icon ?? Uint8List(0),
+            )).toList(),
+            preloadedFavoriteApps: selectedApps.map((app) => AppData(
+              name: app.name ?? '',
+              packageName: app.packageName ?? '',
+              icon: app.icon ?? Uint8List(0),
+            )).toList(),
           ),
-        ],
-      ),
-    );
+        ),
+      );
+    } catch (e) {
+      print('Error opening home settings: $e');
+      // If home settings fails, still navigate to launcher
+      if (!mounted) return;
+      _navigateToLauncher();
+    }
   }
 
   Future<void> _checkPermissions() async {
@@ -1719,7 +1699,6 @@ class _DashboardState extends State<Dashboard> {
       if (smsStatus.isDenied) {
         await Permission.sms.request();
       }
-
 
       if (locationPermission == LocationPermission.denied ||
           locationPermission == LocationPermission.deniedForever ||

@@ -962,9 +962,6 @@ class _LauncherState extends State<Launcher> with SingleTickerProviderStateMixin
       _enteredPassword = '';
     });
     
-    // Close all recent apps
-    platform.invokeMethod('closeAllApps');
-    
     if (!mounted) return;
     
     showDialog(
