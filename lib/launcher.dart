@@ -964,9 +964,14 @@ class _LauncherState extends State<Launcher> with SingleTickerProviderStateMixin
     
     if (!mounted) return;
     
+    // Set system UI flags to prevent access to system bars
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.manual, overlays: []);
+    
     showDialog(
       context: context,
       barrierDismissible: false,
+      barrierColor: Colors.black,
+      useSafeArea: false,
       builder: (context) => WillPopScope(
         onWillPop: () async => false,
         child: TweenAnimationBuilder(
@@ -1221,6 +1226,9 @@ class _LauncherState extends State<Launcher> with SingleTickerProviderStateMixin
 
   void _checkPassword(String password) {
     if (password == widget.password) {
+      // Restore system UI
+      SystemChrome.setEnabledSystemUIMode(SystemUiMode.manual, overlays: SystemUiOverlay.values);
+      
       setState(() {
         _isLocked = false;
         _remainingMinutes = widget.hours * 60 + widget.minutes;

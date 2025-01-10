@@ -6,6 +6,11 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
+import android.provider.Settings
+import android.app.AppOpsManager
+import android.os.Process
+import android.os.Bundle
+import android.net.Uri
 import androidx.annotation.NonNull
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -14,6 +19,24 @@ import java.io.ByteArrayOutputStream
 
 class MainActivity: FlutterActivity() {
     private val CHANNEL = "com.example.safelaunch/app_launcher"
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        // İlk başlatmada icazələri yoxla
+        checkAndRequestPermissions()
+    }
+
+    private fun checkAndRequestPermissions() {
+        // Usage Stats icazəsini yoxla
+        if (!checkUsageStatsPermission()) {
+            requestUsageStatsPermission()
+        }
+
+        // System Alert icazəsini yoxla
+        if (!Settings.canDrawOverlays(this)) {
+            requestSystemAlertPermission()
+        }
+    }
 
     override fun configureFlutterEngine(@NonNull flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -33,6 +56,20 @@ class MainActivity: FlutterActivity() {
                 }
                 "openHomeSettings" -> {
                     openHomeSettings()
+                    result.success(true)
+                }
+                "checkUsageStatsPermission" -> {
+                    result.success(checkUsageStatsPermission())
+                }
+                "requestUsageStatsPermission" -> {
+                    requestUsageStatsPermission()
+                    result.success(true)
+                }
+                "checkSystemAlertPermission" -> {
+                    result.success(Settings.canDrawOverlays(this))
+                }
+                "requestSystemAlertPermission" -> {
+                    requestSystemAlertPermission()
                     result.success(true)
                 }
                 else -> {
@@ -122,5 +159,55 @@ class MainActivity: FlutterActivity() {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK
         }
         startActivity(intent)
+    }
+
+    private fun checkUsageStatsPermission(): Boolean {
+        try {
+            val appOps = getSystemService(APP_OPS_SERVICE) as AppOpsManager
+            val mode = appOps.checkOpNoThrow(
+                AppOpsManager.OPSTR_GET_USAGE_STATS,
+                Process.myUid(),
+                packageName
+            )
+            return mode == AppOpsManager.MODE_ALLOWED
+        } catch (e: Exception) {
+            e.printStackTrace()
+            return false
+        }
+    }
+
+    private fun requestUsageStatsPermission() {
+        try {
+            val intent = Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                data = Uri.parse("package:$packageName")
+            }
+            startActivity(intent)
+        } catch (e: Exception) {
+            e.printStackTrace()
+            // Əgər spesifik səhifə açılmazsa, ümumi settings səhifəsini aç
+            try {
+                val intent = Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS).apply {
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                }
+                startActivity(intent)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+
+    private fun requestSystemAlertPermission() {
+        try {
+            val intent = Intent(
+                Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                Uri.parse("package:$packageName")
+            ).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            }
+            startActivity(intent)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
     }
 }
