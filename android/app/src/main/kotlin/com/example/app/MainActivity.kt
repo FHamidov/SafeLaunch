@@ -115,13 +115,8 @@ class MainActivity: FlutterActivity() {
                     val locked = call.argument<Boolean>("locked") ?: false
                     isLocked = locked
                     if (isLocked) {
-                        // Clear recent tasks when locked
-                        val am = getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
-                        am.appTasks.forEach { task ->
-                            if (task.taskInfo.baseActivity?.packageName != packageName) {
-                                task.finishAndRemoveTask()
-                            }
-                        }
+                        // Close all running apps and clear recent tasks when locked
+                        closeAllRunningApps()
                     }
                     result.success(true)
                 }
@@ -129,6 +124,36 @@ class MainActivity: FlutterActivity() {
                     result.notImplemented()
                 }
             }
+        }
+    }
+
+    private fun closeAllRunningApps() {
+        try {
+            val am = getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+            
+            // Get list of running apps
+            val runningApps = am.runningAppProcesses
+            
+            // Kill all apps except our own
+            runningApps?.forEach { processInfo ->
+                if (processInfo.processName != packageName) {
+                    Process.killProcess(processInfo.pid)
+                }
+            }
+            
+            // Clear recent tasks
+            am.appTasks.forEach { task ->
+                if (task.taskInfo.baseActivity?.packageName != packageName) {
+                    task.finishAndRemoveTask()
+                }
+            }
+            
+            // Bring our app to front
+            val intent = Intent(this, MainActivity::class.java)
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            startActivity(intent)
+        } catch (e: Exception) {
+            e.printStackTrace()
         }
     }
 
