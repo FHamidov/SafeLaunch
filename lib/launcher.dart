@@ -9,6 +9,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:safelaunch/models/app_data.dart';
+import 'package:safelaunch/parental_controls.dart';
 
 class Launcher extends StatefulWidget {
   final int hours;
@@ -1262,7 +1263,7 @@ class _LauncherState extends State<Launcher> with SingleTickerProviderStateMixin
       context: context,
       barrierDismissible: true,
       barrierColor: Colors.black.withOpacity(0.4),
-      builder: (BuildContext dialogContext) => BackdropFilter(
+      builder: (context) => BackdropFilter(
         filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
         child: Dialog(
           backgroundColor: Colors.transparent,
@@ -1291,7 +1292,7 @@ class _LauncherState extends State<Launcher> with SingleTickerProviderStateMixin
               children: [
                 // Parent Icon with Animation
                 TweenAnimationBuilder(
-                  duration: Duration(milliseconds: 200),
+                  duration: Duration(milliseconds: 300),
                   tween: Tween<double>(begin: 0, end: 1),
                   builder: (context, double value, child) {
                     return Transform.scale(
@@ -1347,7 +1348,7 @@ class _LauncherState extends State<Launcher> with SingleTickerProviderStateMixin
                 
                 // Password field with animation
                 TweenAnimationBuilder(
-                  duration: Duration(milliseconds: 350),
+                  duration: Duration(milliseconds: 250),
                   tween: Tween<double>(begin: 0, end: 1),
                   builder: (context, double value, child) {
                     return Transform.scale(
@@ -1389,25 +1390,26 @@ class _LauncherState extends State<Launcher> with SingleTickerProviderStateMixin
                           },
                           onSubmitted: (value) {
                             if (value == widget.password) {
-                              Navigator.pop(dialogContext);
+                              FocusScope.of(context).unfocus();
+                              Navigator.pop(context);
                               // TODO: Add parent settings page navigation
                             } else {
-                              Navigator.pop(dialogContext);
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text('Wrong password'),
-                                  backgroundColor: Colors.redAccent.withOpacity(0.9),
-                                  behavior: SnackBarBehavior.floating,
-                                  margin: EdgeInsets.all(16),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                ),
+                              FocusScope.of(context).unfocus();
+                              // Shake animation for text field
+                              final controller = AnimationController(
+                                duration: Duration(milliseconds: 500),
+                                vsync: Navigator.of(context),
                               );
-                              // Show dialog again after error
-                              Future.delayed(Duration(milliseconds: 100), () {
-                                _showParentPasswordDialog();
-                              });
+                              final offset = Tween<Offset>(
+                                begin: Offset(-10, 0),
+                                end: Offset(10, 0),
+                              ).animate(CurvedAnimation(
+                                parent: controller,
+                                curve: Curves.elasticIn,
+                              ));
+                              controller.forward().then((_) => controller.reverse());
+
+                              _showErrorOverlay(context);
                             }
                           },
                         ),
@@ -1420,7 +1422,7 @@ class _LauncherState extends State<Launcher> with SingleTickerProviderStateMixin
                 
                 // Verify button with animation
                 TweenAnimationBuilder(
-                  duration: Duration(milliseconds: 350),
+                  duration: Duration(milliseconds: 250),
                   tween: Tween<double>(begin: 0, end: 1),
                   builder: (context, double value, child) {
                     return Transform.scale(
@@ -1445,25 +1447,33 @@ class _LauncherState extends State<Launcher> with SingleTickerProviderStateMixin
                             borderRadius: BorderRadius.circular(14),
                             onTap: () {
                               if (enteredPassword == widget.password) {
-                                Navigator.pop(dialogContext);
+                                FocusScope.of(context).unfocus();
+                                Navigator.pop(context);
                                 // TODO: Add parent settings page navigation
-                              } else {
-                                Navigator.pop(dialogContext);
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text('Wrong password'),
-                                    backgroundColor: Colors.redAccent.withOpacity(0.9),
-                                    behavior: SnackBarBehavior.floating,
-                                    margin: EdgeInsets.all(16),
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => ParentalControls(),
                                   ),
                                 );
-                                // Show dialog again after error
-                                Future.delayed(Duration(milliseconds: 100), () {
-                                  _showParentPasswordDialog();
-                                });
+                                
+                              } else {
+                                FocusScope.of(context).unfocus();
+                                // Shake animation for button
+                                final controller = AnimationController(
+                                  duration: Duration(milliseconds: 500),
+                                  vsync: Navigator.of(context),
+                                );
+                                final offset = Tween<Offset>(
+                                  begin: Offset(-10, 0),
+                                  end: Offset(10, 0),
+                                ).animate(CurvedAnimation(
+                                  parent: controller,
+                                  curve: Curves.elasticIn,
+                                ));
+                                controller.forward().then((_) => controller.reverse());
+
+                                _showErrorOverlay(context);
                               }
                             },
                             child: Center(
@@ -1489,6 +1499,58 @@ class _LauncherState extends State<Launcher> with SingleTickerProviderStateMixin
         ),
       ),
     );
+  }
+
+  void _showErrorOverlay(BuildContext context) {
+    OverlayState? overlayState = Overlay.of(context);
+    late OverlayEntry overlayEntry;
+    
+    overlayEntry = OverlayEntry(
+      builder: (context) => Positioned(
+        top: MediaQuery.of(context).size.height - 100,
+        left: 16,
+        right: 16,
+        child: Material(
+          color: Colors.transparent,
+          child: Container(
+            padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              color: Colors.redAccent.withOpacity(0.9),
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.2),
+                  blurRadius: 8,
+                  offset: Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.error_outline, color: Colors.white),
+                SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Yanlış şifrə! Yenidən cəhd edin.',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+
+    overlayState?.insert(overlayEntry);
+
+    Future.delayed(Duration(seconds: 3), () {
+      overlayEntry.remove();
+    });
   }
 
   @override
