@@ -11,6 +11,9 @@ import android.app.AppOpsManager
 import android.os.Process
 import android.os.Bundle
 import android.net.Uri
+import android.view.KeyEvent
+import android.app.ActivityManager
+import android.content.Context
 import androidx.annotation.NonNull
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -19,11 +22,47 @@ import java.io.ByteArrayOutputStream
 
 class MainActivity: FlutterActivity() {
     private val CHANNEL = "com.example.safelaunch/app_launcher"
+    private var isLocked = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         // İlk başlatmada icazələri yoxla
         checkAndRequestPermissions()
+        
+        // Make sure we are always the default home app
+        val intent = Intent(Intent.ACTION_MAIN)
+        intent.addCategory(Intent.CATEGORY_HOME)
+        intent.addCategory(Intent.CATEGORY_DEFAULT)
+        intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
+        packageManager.setComponentEnabledSetting(
+            componentName,
+            PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
+            PackageManager.DONT_KILL_APP
+        )
+    }
+
+    override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
+        return if (isLocked) {
+            when (keyCode) {
+                KeyEvent.KEYCODE_HOME,
+                KeyEvent.KEYCODE_BACK,
+                KeyEvent.KEYCODE_APP_SWITCH,
+                KeyEvent.KEYCODE_MENU -> true
+                else -> super.onKeyDown(keyCode, event)
+            }
+        } else {
+            super.onKeyDown(keyCode, event)
+        }
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (isLocked && !hasFocus) {
+            // If app loses focus while locked, bring it back to front
+            val intent = Intent(this, MainActivity::class.java)
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            startActivity(intent)
+        }
     }
 
     private fun checkAndRequestPermissions() {
@@ -72,6 +111,20 @@ class MainActivity: FlutterActivity() {
                     requestSystemAlertPermission()
                     result.success(true)
                 }
+                "setLockState" -> {
+                    val locked = call.argument<Boolean>("locked") ?: false
+                    isLocked = locked
+                    if (isLocked) {
+                        // Clear recent tasks when locked
+                        val am = getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+                        am.appTasks.forEach { task ->
+                            if (task.taskInfo.baseActivity?.packageName != packageName) {
+                                task.finishAndRemoveTask()
+                            }
+                        }
+                    }
+                    result.success(true)
+                }
                 else -> {
                     result.notImplemented()
                 }
@@ -87,33 +140,22 @@ class MainActivity: FlutterActivity() {
         val apps = mutableListOf<Map<String, Any>>()
         val resolveInfos = pm.queryIntentActivities(mainIntent, PackageManager.MATCH_ALL)
 
-        // Önce tüm app bilgilerini toplayalım
-        val appsList = resolveInfos.map { resolveInfo ->
+        resolveInfos.forEach { resolveInfo ->
             try {
                 val appInfo = resolveInfo.activityInfo.applicationInfo
                 val name = pm.getApplicationLabel(appInfo).toString()
                 val packageName = appInfo.packageName
-                Pair(appInfo, name)
-            } catch (e: Exception) {
-                null
-            }
-        }.filterNotNull()
-        .sortedBy { it.second } // İsimlere göre sırala
-
-        // Sonra ikonları yükleyelim
-        appsList.forEach { (appInfo, name) ->
-            try {
                 val icon = appInfo.loadIcon(pm)
                 val iconBytes = drawableToByteArray(icon)
 
                 val appData = mapOf(
                     "name" to name,
-                    "packageName" to appInfo.packageName,
+                    "packageName" to packageName,
                     "icon" to iconBytes
                 )
                 apps.add(appData)
             } catch (e: Exception) {
-                println("Error loading app icon: ${e.message}")
+                e.printStackTrace()
             }
         }
 
@@ -124,7 +166,7 @@ class MainActivity: FlutterActivity() {
         val bitmap = if (drawable is BitmapDrawable) {
             drawable.bitmap
         } else {
-            val width = 48  // Sabit boyut kullan
+            val width = 48
             val height = 48
             val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
             val canvas = Canvas(bitmap)
@@ -134,7 +176,7 @@ class MainActivity: FlutterActivity() {
         }
 
         val stream = ByteArrayOutputStream()
-        bitmap.compress(Bitmap.CompressFormat.PNG, 80, stream) // Kaliteyi düşür
+        bitmap.compress(Bitmap.CompressFormat.PNG, 80, stream)
         return stream.toByteArray()
     }
 
@@ -154,16 +196,14 @@ class MainActivity: FlutterActivity() {
     }
 
     private fun openHomeSettings() {
-        val intent = Intent().apply {
-            action = android.provider.Settings.ACTION_HOME_SETTINGS
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK
-        }
+        val intent = Intent(Settings.ACTION_HOME_SETTINGS)
+        intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
         startActivity(intent)
     }
 
     private fun checkUsageStatsPermission(): Boolean {
         try {
-            val appOps = getSystemService(APP_OPS_SERVICE) as AppOpsManager
+            val appOps = getSystemService(Context.APP_OPS_SERVICE) as AppOpsManager
             val mode = appOps.checkOpNoThrow(
                 AppOpsManager.OPSTR_GET_USAGE_STATS,
                 Process.myUid(),
@@ -185,7 +225,6 @@ class MainActivity: FlutterActivity() {
             startActivity(intent)
         } catch (e: Exception) {
             e.printStackTrace()
-            // Əgər spesifik səhifə açılmazsa, ümumi settings səhifəsini aç
             try {
                 val intent = Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS).apply {
                     flags = Intent.FLAG_ACTIVITY_NEW_TASK

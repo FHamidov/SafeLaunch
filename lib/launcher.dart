@@ -967,6 +967,9 @@ class _LauncherState extends State<Launcher> with SingleTickerProviderStateMixin
     // Set system UI flags to prevent access to system bars
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.manual, overlays: []);
     
+    // Notify Android about lock state
+    platform.invokeMethod('setLockState', {'locked': true});
+    
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -1228,6 +1231,9 @@ class _LauncherState extends State<Launcher> with SingleTickerProviderStateMixin
     if (password == widget.password) {
       // Restore system UI
       SystemChrome.setEnabledSystemUIMode(SystemUiMode.manual, overlays: SystemUiOverlay.values);
+      
+      // Notify Android about unlock
+      platform.invokeMethod('setLockState', {'locked': false});
       
       setState(() {
         _isLocked = false;
