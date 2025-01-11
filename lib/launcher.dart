@@ -970,8 +970,21 @@ class _LauncherState extends State<Launcher> with SingleTickerProviderStateMixin
     // Set system UI flags to prevent access to system bars
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.manual, overlays: []);
     
-    // Notify Android about lock state
-    platform.invokeMethod('setLockState', {'locked': true});
+    // Notify Android about lock state and enable notification blocking
+    platform.invokeMethod('setLockState', {
+      'locked': true,
+      'blockNotifications': true
+    });
+
+    // Start periodic check to ensure we stay in foreground
+    Timer.periodic(Duration(milliseconds: 500), (timer) {
+      if (!_isLocked) {
+        timer.cancel();
+        return;
+      }
+      // Keep bringing app to front while locked
+      platform.invokeMethod('bringToFront');
+    });
     
     showDialog(
       context: context,

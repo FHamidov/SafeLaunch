@@ -19,6 +19,9 @@ import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 import java.io.ByteArrayOutputStream
+import android.app.Application
+import android.app.Activity
+import android.view.WindowManager
 
 class MainActivity: FlutterActivity() {
     private val CHANNEL = "com.example.safelaunch/app_launcher"
@@ -28,6 +31,9 @@ class MainActivity: FlutterActivity() {
         super.onCreate(savedInstanceState)
         // İlk başlatmada icazələri yoxla
         checkAndRequestPermissions()
+        
+        // Block notifications from opening apps when locked
+        blockNotificationOpening()
         
         // Make sure we are always the default home app
         val intent = Intent(Intent.ACTION_MAIN)
@@ -113,11 +119,20 @@ class MainActivity: FlutterActivity() {
                 }
                 "setLockState" -> {
                     val locked = call.argument<Boolean>("locked") ?: false
+                    val blockNotifications = call.argument<Boolean>("blockNotifications") ?: false
                     isLocked = locked
                     if (isLocked) {
                         // Close all running apps and clear recent tasks when locked
                         closeAllRunningApps()
+                        if (blockNotifications) {
+                            // Enable stronger notification blocking
+                            enableStrongNotificationBlocking()
+                        }
                     }
+                    result.success(true)
+                }
+                "bringToFront" -> {
+                    bringAppToFront()
                     result.success(true)
                 }
                 else -> {
@@ -152,6 +167,33 @@ class MainActivity: FlutterActivity() {
             val intent = Intent(this, MainActivity::class.java)
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             startActivity(intent)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    // Add notification blocking when locked
+    private fun blockNotificationOpening() {
+        try {
+            // Register activity lifecycle callbacks
+            application.registerActivityLifecycleCallbacks(object : Application.ActivityLifecycleCallbacks {
+                override fun onActivityStarted(activity: Activity) {
+                    if (isLocked && activity.javaClass != MainActivity::class.java) {
+                        // If screen is locked and trying to open another app, redirect back to our app
+                        val intent = Intent(this@MainActivity, MainActivity::class.java)
+                        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        startActivity(intent)
+                        activity.finish()
+                    }
+                }
+
+                override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) {}
+                override fun onActivityResumed(activity: Activity) {}
+                override fun onActivityPaused(activity: Activity) {}
+                override fun onActivityStopped(activity: Activity) {}
+                override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) {}
+                override fun onActivityDestroyed(activity: Activity) {}
+            })
         } catch (e: Exception) {
             e.printStackTrace()
         }
@@ -270,6 +312,45 @@ class MainActivity: FlutterActivity() {
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK
             }
             startActivity(intent)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    private fun bringAppToFront() {
+        try {
+            val am = getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+            am.moveTaskToFront(taskId, ActivityManager.MOVE_TASK_WITH_HOME)
+            
+            // Also bring activity to front
+            val intent = Intent(this, MainActivity::class.java)
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or 
+                          Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
+            startActivity(intent)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    private fun enableStrongNotificationBlocking() {
+        try {
+            // Set as top activity
+            val am = getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+            am.moveTaskToFront(taskId, ActivityManager.MOVE_TASK_WITH_HOME)
+            
+            // Keep app in foreground
+            val serviceIntent = Intent(this, MainActivity::class.java)
+            serviceIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or 
+                                 Intent.FLAG_ACTIVITY_SINGLE_TOP or
+                                 Intent.FLAG_ACTIVITY_CLEAR_TOP)
+            startActivity(serviceIntent)
+            
+            // Block task switching
+            if (Settings.canDrawOverlays(this)) {
+                val window = window
+                window.addFlags(WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
+                              WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE)
+            }
         } catch (e: Exception) {
             e.printStackTrace()
         }
