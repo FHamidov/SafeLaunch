@@ -39,87 +39,59 @@ class _LockScreenState extends State<LockScreen> {
   static const platform = MethodChannel('com.example.safelaunch/app_launcher');
   String _enteredPassword = '';
 
-  void _checkPassword(String password) async {
+  void _checkPassword(String password) {
     if (password == widget.password) {
       // Restore system UI
       SystemChrome.setEnabledSystemUIMode(SystemUiMode.manual, overlays: SystemUiOverlay.values);
       
-      // Get SharedPreferences instance
-      final prefs = await SharedPreferences.getInstance();
-      
-      // Reset last reset date to force immediate time update
-      await prefs.setString('lastResetDate', DateTime.now().toIso8601String());
-      
-      // Notify Android about unlock and remove blocks
-      await platform.invokeMethod('setLockState', {'locked': false});
+      // Notify Android about unlock
+      platform.invokeMethod('setLockState', {'locked': false});
 
-      // Navigate to ParentalControls screen
-      if (!mounted) return;
-      Navigator.pushAndRemoveUntil(
-        context,
+      // Navigate back to launcher screen
+      Navigator.of(context).pushReplacement(
         MaterialPageRoute(
-          builder: (context) => ParentalControls(
-            onTimeUpdated: (int newMinutes) async {
-              // Calculate new hours and minutes
-              int newHours = newMinutes ~/ 60;
-              int newMinutesRemaining = newMinutes % 60;
-              
-              // Get SharedPreferences instance
-              final prefs = await SharedPreferences.getInstance();
-              
-              // Save new time limits
-              await prefs.setInt('hours', newHours);
-              await prefs.setInt('minutes', newMinutesRemaining);
-              await prefs.setInt('remainingMinutes', newMinutes);
-              
-              // Reset last reset date to force immediate time update
-              await prefs.setString('lastResetDate', DateTime.now().toIso8601String());
-
-              // Navigate back to launcher with new time
-              if (!mounted) return;
-              Navigator.pushAndRemoveUntil(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => Launcher(
-                    hours: newHours,
-                    minutes: newMinutesRemaining,
-                    password: widget.password,
-                    emergencyContact: widget.emergencyContact,
-                    selectedAppPackages: widget.selectedAppPackages,
-                    preloadedAllApps: widget.preloadedAllApps,
-                    preloadedFavoriteApps: widget.preloadedFavoriteApps,
-                  ),
-                ),
-                (route) => false,
-              );
-            },
+          builder: (context) => Launcher(
+            hours: widget.hours,
+            minutes: widget.minutes,
+            password: widget.password,
+            emergencyContact: widget.emergencyContact,
+            selectedAppPackages: widget.selectedAppPackages,
+            preloadedAllApps: widget.preloadedAllApps,
+            preloadedFavoriteApps: widget.preloadedFavoriteApps,
           ),
         ),
-        (route) => false,
       );
     } else {
-      // Show error for incorrect password
-      setState(() => _enteredPassword = '');
+      // Show error with haptic feedback
       HapticFeedback.heavyImpact();
       
-      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Row(
             children: [
               Icon(Icons.error_outline, color: Colors.white),
               SizedBox(width: 8),
-              Text('Incorrect password'),
+              Text('Yanlış şifrə!'),
             ],
           ),
           backgroundColor: Colors.red,
           behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(10),
+          margin: EdgeInsets.only(
+            bottom: MediaQuery.of(context).size.height - 100,
+            left: 20,
+            right: 20,
           ),
-          margin: EdgeInsets.all(10),
+          duration: Duration(seconds: 2),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
         ),
       );
+      
+      // Clear password on wrong attempt
+      setState(() {
+        _enteredPassword = '';
+      });
     }
   }
 
@@ -1337,8 +1309,7 @@ class _LauncherState extends State<Launcher> with SingleTickerProviderStateMixin
       platform.invokeMethod('bringToFront');
     });
 
-    Navigator.pushAndRemoveUntil(
-      context,
+    Navigator.of(context).pushReplacement(
       MaterialPageRoute(
         builder: (context) => LockScreen(
           password: widget.password,
@@ -1350,7 +1321,6 @@ class _LauncherState extends State<Launcher> with SingleTickerProviderStateMixin
           preloadedFavoriteApps: widget.preloadedFavoriteApps,
         ),
       ),
-      (route) => false, // Remove all previous routes
     );
   }
 
