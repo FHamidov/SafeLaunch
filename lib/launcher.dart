@@ -1392,23 +1392,21 @@ class _LauncherState extends State<Launcher> with SingleTickerProviderStateMixin
                             if (value == widget.password) {
                               FocusScope.of(context).unfocus();
                               Navigator.pop(context);
-                              // TODO: Add parent settings page navigation
+                              // Navigate to parent settings page
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => ParentalControls(
+                                    onTimeUpdated: (int newMinutes) {
+                                      setState(() {
+                                        _remainingMinutes = newMinutes;
+                                      });
+                                    },
+                                  ),
+                                ),
+                              );
                             } else {
                               FocusScope.of(context).unfocus();
-                              // Shake animation for text field
-                              final controller = AnimationController(
-                                duration: Duration(milliseconds: 500),
-                                vsync: Navigator.of(context),
-                              );
-                              final offset = Tween<Offset>(
-                                begin: Offset(-10, 0),
-                                end: Offset(10, 0),
-                              ).animate(CurvedAnimation(
-                                parent: controller,
-                                curve: Curves.elasticIn,
-                              ));
-                              controller.forward().then((_) => controller.reverse());
-
                               _showErrorOverlay(context);
                             }
                           },
@@ -1449,30 +1447,21 @@ class _LauncherState extends State<Launcher> with SingleTickerProviderStateMixin
                               if (enteredPassword == widget.password) {
                                 FocusScope.of(context).unfocus();
                                 Navigator.pop(context);
-                                // TODO: Add parent settings page navigation
+                                // Navigate to parent settings page
                                 Navigator.push(
                                   context,
                                   MaterialPageRoute(
-                                    builder: (context) => ParentalControls(),
+                                    builder: (context) => ParentalControls(
+                                      onTimeUpdated: (int newMinutes) {
+                                        setState(() {
+                                          _remainingMinutes = newMinutes;
+                                        });
+                                      },
+                                    ),
                                   ),
                                 );
-                                
                               } else {
                                 FocusScope.of(context).unfocus();
-                                // Shake animation for button
-                                final controller = AnimationController(
-                                  duration: Duration(milliseconds: 500),
-                                  vsync: Navigator.of(context),
-                                );
-                                final offset = Tween<Offset>(
-                                  begin: Offset(-10, 0),
-                                  end: Offset(10, 0),
-                                ).animate(CurvedAnimation(
-                                  parent: controller,
-                                  curve: Curves.elasticIn,
-                                ));
-                                controller.forward().then((_) => controller.reverse());
-
                                 _showErrorOverlay(context);
                               }
                             },
