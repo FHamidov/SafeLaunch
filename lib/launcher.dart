@@ -11,6 +11,358 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:safelaunch/models/app_data.dart';
 import 'package:safelaunch/parental_controls.dart';
 
+class LockScreen extends StatefulWidget {
+  final String password;
+  final int hours;
+  final int minutes;
+  final Contact? emergencyContact;
+  final List<String> selectedAppPackages;
+  final List<AppData> preloadedAllApps;
+  final List<AppData> preloadedFavoriteApps;
+
+  const LockScreen({
+    Key? key,
+    required this.password,
+    required this.hours,
+    required this.minutes,
+    required this.emergencyContact,
+    required this.selectedAppPackages,
+    required this.preloadedAllApps,
+    required this.preloadedFavoriteApps,
+  }) : super(key: key);
+
+  @override
+  _LockScreenState createState() => _LockScreenState();
+}
+
+class _LockScreenState extends State<LockScreen> {
+  static const platform = MethodChannel('com.example.safelaunch/app_launcher');
+  String _enteredPassword = '';
+
+  void _checkPassword(String password) async {
+    if (password == widget.password) {
+      // Restore system UI
+      SystemChrome.setEnabledSystemUIMode(SystemUiMode.manual, overlays: SystemUiOverlay.values);
+      
+      // Get SharedPreferences instance
+      final prefs = await SharedPreferences.getInstance();
+      
+      // Reset last reset date to force immediate time update
+      await prefs.setString('lastResetDate', DateTime.now().toIso8601String());
+      
+      // Notify Android about unlock and remove blocks
+      await platform.invokeMethod('setLockState', {'locked': false});
+
+      // Navigate to ParentalControls screen
+      if (!mounted) return;
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(
+          builder: (context) => ParentalControls(
+            onTimeUpdated: (int newMinutes) async {
+              // Calculate new hours and minutes
+              int newHours = newMinutes ~/ 60;
+              int newMinutesRemaining = newMinutes % 60;
+              
+              // Get SharedPreferences instance
+              final prefs = await SharedPreferences.getInstance();
+              
+              // Save new time limits
+              await prefs.setInt('hours', newHours);
+              await prefs.setInt('minutes', newMinutesRemaining);
+              await prefs.setInt('remainingMinutes', newMinutes);
+              
+              // Reset last reset date to force immediate time update
+              await prefs.setString('lastResetDate', DateTime.now().toIso8601String());
+
+              // Navigate back to launcher with new time
+              if (!mounted) return;
+              Navigator.pushAndRemoveUntil(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => Launcher(
+                    hours: newHours,
+                    minutes: newMinutesRemaining,
+                    password: widget.password,
+                    emergencyContact: widget.emergencyContact,
+                    selectedAppPackages: widget.selectedAppPackages,
+                    preloadedAllApps: widget.preloadedAllApps,
+                    preloadedFavoriteApps: widget.preloadedFavoriteApps,
+                  ),
+                ),
+                (route) => false,
+              );
+            },
+          ),
+        ),
+        (route) => false,
+      );
+    } else {
+      // Show error for incorrect password
+      setState(() => _enteredPassword = '');
+      HapticFeedback.heavyImpact();
+      
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              Icon(Icons.error_outline, color: Colors.white),
+              SizedBox(width: 8),
+              Text('Incorrect password'),
+            ],
+          ),
+          backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
+          margin: EdgeInsets.all(10),
+        ),
+      );
+    }
+  }
+
+  Widget _buildKeypadButton(String value, {bool isSpecial = false}) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () {
+          if (value == '⌫') {
+            if (_enteredPassword.isNotEmpty) {
+              setState(() {
+                _enteredPassword = _enteredPassword.substring(0, _enteredPassword.length - 1);
+              });
+            }
+          } else if (value == 'C') {
+            setState(() {
+              _enteredPassword = '';
+            });
+          } else if (_enteredPassword.length < 6) {
+            setState(() {
+              _enteredPassword += value;
+            });
+            if (_enteredPassword.length == 6) {
+              _checkPassword(_enteredPassword);
+            }
+          }
+        },
+        borderRadius: BorderRadius.circular(40),
+        child: Container(
+          width: 80,
+          height: 80,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: isSpecial ? Colors.white.withOpacity(0.1) : Colors.white.withOpacity(0.05),
+            border: Border.all(
+              color: Colors.white.withOpacity(0.2),
+              width: 2,
+            ),
+          ),
+          child: Center(
+            child: Text(
+              value,
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: isSpecial ? 24 : 28,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return WillPopScope(
+      onWillPop: () async => false,
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        body: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                Color(0xFF1A237E),
+                Color(0xFF0D47A1),
+                Color(0xFF01579B),
+              ],
+            ),
+          ),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+            child: Container(
+              color: Colors.black.withOpacity(0.3),
+              child: SafeArea(
+                child: Column(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          // Animated clock icon with stars
+                          Stack(
+                            alignment: Alignment.center,
+                            children: [
+                              // Rotating stars
+                              ...List.generate(6, (index) {
+                                return TweenAnimationBuilder(
+                                  duration: Duration(seconds: 2),
+                                  tween: Tween<double>(begin: 0, end: 1),
+                                  builder: (context, double value, child) {
+                                    return Transform.rotate(
+                                      angle: value * 2 * 3.14 + (index * 1.0),
+                                      child: Transform.translate(
+                                        offset: Offset(50 * cos(index * 1.0), 50 * sin(index * 1.0)),
+                                        child: Icon(
+                                          Icons.star,
+                                          color: Colors.amber,
+                                          size: 20,
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                );
+                              }),
+                              // Main clock icon
+                              Container(
+                                width: 80,
+                                height: 80,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  gradient: LinearGradient(
+                                    colors: [
+                                      Colors.blue[300]!,
+                                      Colors.blue[600]!,
+                                    ],
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
+                                  ),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.blue.withOpacity(0.3),
+                                      blurRadius: 15,
+                                      spreadRadius: 5,
+                                    ),
+                                  ],
+                                ),
+                                child: Icon(
+                                  Icons.timer_off_rounded,
+                                  size: 40,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ],
+                          ),
+                          SizedBox(height: 40),
+                          
+                          // Time's Up text
+                          ShaderMask(
+                            shaderCallback: (bounds) => LinearGradient(
+                              colors: [
+                                Colors.blue[400]!,
+                                Colors.purple[400]!,
+                              ],
+                            ).createShader(bounds),
+                            child: Text(
+                              "Time's Up!",
+                              style: TextStyle(
+                                fontSize: 32,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ),
+                          
+                          SizedBox(height: 16),
+                          
+                          // Password display
+                          Container(
+                            margin: EdgeInsets.symmetric(horizontal: 50),
+                            padding: EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(
+                                color: Colors.white.withOpacity(0.2),
+                                width: 2,
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: List.generate(6, (index) {
+                                bool isFilled = index < _enteredPassword.length;
+                                return Container(
+                                  margin: EdgeInsets.symmetric(horizontal: 8),
+                                  width: 16,
+                                  height: 16,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color: isFilled ? Colors.white : Colors.transparent,
+                                    border: Border.all(
+                                      color: Colors.white.withOpacity(0.5),
+                                      width: 2,
+                                    ),
+                                  ),
+                                );
+                              }),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    
+                    // Custom numeric keypad
+                    Container(
+                      padding: EdgeInsets.all(20),
+                      child: Column(
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                            children: List.generate(3, (index) {
+                              return _buildKeypadButton((index + 1).toString());
+                            }),
+                          ),
+                          SizedBox(height: 20),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                            children: List.generate(3, (index) {
+                              return _buildKeypadButton((index + 4).toString());
+                            }),
+                          ),
+                          SizedBox(height: 20),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                            children: List.generate(3, (index) {
+                              return _buildKeypadButton((index + 7).toString());
+                            }),
+                          ),
+                          SizedBox(height: 20),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                            children: [
+                              _buildKeypadButton('C', isSpecial: true),
+                              _buildKeypadButton('0'),
+                              _buildKeypadButton('⌫', isSpecial: true),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class Launcher extends StatefulWidget {
   final int hours;
   final int minutes;
@@ -962,7 +1314,6 @@ class _LauncherState extends State<Launcher> with SingleTickerProviderStateMixin
   void _lockScreen() {
     setState(() {
       _isLocked = true;
-      _enteredPassword = '';
     });
     
     if (!mounted) return;
@@ -985,287 +1336,22 @@ class _LauncherState extends State<Launcher> with SingleTickerProviderStateMixin
       // Keep bringing app to front while locked
       platform.invokeMethod('bringToFront');
     });
-    
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      barrierColor: Colors.black,
-      useSafeArea: false,
-      builder: (context) => WillPopScope(
-        onWillPop: () async => false,
-        child: TweenAnimationBuilder(
-          duration: Duration(milliseconds: 800),
-          tween: Tween<double>(begin: 0, end: 1),
-          builder: (context, double value, child) {
-            return BackdropFilter(
-              filter: ImageFilter.blur(
-                sigmaX: 10 * value,
-                sigmaY: 10 * value,
-              ),
-              child: Dialog(
-                backgroundColor: Colors.transparent,
-                elevation: 0,
-                child: Container(
-                  padding: EdgeInsets.all(24),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.95),
-                    borderRadius: BorderRadius.circular(30),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.blue.withOpacity(0.2),
-                        blurRadius: 20,
-                        spreadRadius: 5,
-                      ),
-                    ],
-                    border: Border.all(
-                      color: Colors.blue.withOpacity(0.3),
-                      width: 2,
-                    ),
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      // Animated clock icon with stars
-                      Stack(
-                        alignment: Alignment.center,
-                        children: [
-                          // Rotating stars
-                          ...List.generate(6, (index) {
-                            return TweenAnimationBuilder(
-                              duration: Duration(seconds: 2),
-                              tween: Tween<double>(begin: 0, end: 1),
-                              builder: (context, double value, child) {
-                                return Transform.rotate(
-                                  angle: value * 2 * 3.14 + (index * 1.0),
-                                  child: Transform.translate(
-                                    offset: Offset(50 * cos(index * 1.0), 50 * sin(index * 1.0)),
-                                    child: Icon(
-                                      Icons.star,
-                                      color: Colors.amber,
-                                      size: 20,
-                                    ),
-                                  ),
-                                );
-                              },
-                            );
-                          }),
-                          // Main clock icon
-                          TweenAnimationBuilder(
-                            duration: Duration(seconds: 2),
-                            tween: Tween<double>(begin: 0, end: 1),
-                            builder: (context, double value, child) {
-                              return Transform.rotate(
-                                angle: value * 2 * 3.14,
-                                child: Container(
-                                  width: 80,
-                                  height: 80,
-                                  decoration: BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    gradient: LinearGradient(
-                                      colors: [
-                                        Colors.blue[300]!,
-                                        Colors.blue[600]!,
-                                      ],
-                                      begin: Alignment.topLeft,
-                                      end: Alignment.bottomRight,
-                                    ),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: Colors.blue.withOpacity(0.3),
-                                        blurRadius: 15,
-                                        spreadRadius: 5,
-                                      ),
-                                    ],
-                                  ),
-                                  child: Icon(
-                                    Icons.timer_off_rounded,
-                                    size: 40,
-                                    color: Colors.white,
-                                  ),
-                                ),
-                              );
-                            },
-                          ),
-                        ],
-                      ),
-                      SizedBox(height: 24),
-                      
-                      // Time's Up text
-                      ShaderMask(
-                        shaderCallback: (bounds) => LinearGradient(
-                          colors: [
-                            Colors.blue[400]!,
-                            Colors.purple[400]!,
-                          ],
-                        ).createShader(bounds),
-                        child: Text(
-                          "Time's Up!",
-                          style: TextStyle(
-                            fontSize: 32,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                          ),
-                        ),
-                      ),
-                      
-                      SizedBox(height: 16),
-                      
-                      // Motivation message
-                      Text(
-                        "It's Break Time! 🌟",
-                        style: TextStyle(
-                          fontSize: 18,
-                          color: Colors.grey[600],
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                      
-                      SizedBox(height: 32),
-                      
-                      // Password field
-                      Container(
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(20),
-                          gradient: LinearGradient(
-                            colors: [
-                              Colors.blue[50]!,
-                              Colors.purple[50]!,
-                            ],
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.1),
-                              blurRadius: 10,
-                              offset: Offset(0, 4),
-                            ),
-                          ],
-                        ),
-                        child: TextField(
-                          obscureText: true,
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: 24,
-                            letterSpacing: 4,
-                          ),
-                          decoration: InputDecoration(
-                            hintText: '••••••',
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(20),
-                              borderSide: BorderSide.none,
-                            ),
-                            contentPadding: EdgeInsets.symmetric(
-                              horizontal: 24,
-                              vertical: 20,
-                            ),
-                          ),
-                          onChanged: (value) {
-                            _enteredPassword = value;
-                          },
-                          onSubmitted: _checkPassword,
-                        ),
-                      ),
-                      
-                      SizedBox(height: 24),
-                      
-                      // Continue button
-                      TweenAnimationBuilder(
-                        duration: Duration(milliseconds: 500),
-                        tween: Tween<double>(begin: 0.8, end: 1),
-                        builder: (context, double value, child) {
-                          return Transform.scale(
-                            scale: value,
-                            child: Container(
-                              width: double.infinity,
-                              height: 60,
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(20),
-                                gradient: LinearGradient(
-                                  colors: [
-                                    Colors.blue[400]!,
-                                    Colors.blue[700]!,
-                                  ],
-                                  begin: Alignment.topLeft,
-                                  end: Alignment.bottomRight,
-                                ),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.blue.withOpacity(0.3),
-                                    blurRadius: 10,
-                                    spreadRadius: 2,
-                                    offset: Offset(0, 4),
-                                  ),
-                                ],
-                              ),
-                              child: Material(
-                                color: Colors.transparent,
-                                child: InkWell(
-                                  borderRadius: BorderRadius.circular(20),
-                                  onTap: () => _checkPassword(_enteredPassword),
-                                  child: Center(
-                                    child: Text(
-                                      'Continue',
-                                      style: TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 18,
-                                        fontWeight: FontWeight.w600,
-                                        letterSpacing: 1,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-                      
-                      SizedBox(height: 16),
-                      
-                      // Hint message
-                      Text(
-                        'Ask your parents for the password 🤗',
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Colors.grey[500],
-                          fontStyle: FontStyle.italic,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            );
-          },
+
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(
+        builder: (context) => LockScreen(
+          password: widget.password,
+          hours: widget.hours,
+          minutes: widget.minutes,
+          emergencyContact: widget.emergencyContact,
+          selectedAppPackages: widget.selectedAppPackages,
+          preloadedAllApps: widget.preloadedAllApps,
+          preloadedFavoriteApps: widget.preloadedFavoriteApps,
         ),
       ),
+      (route) => false, // Remove all previous routes
     );
-  }
-
-  void _checkPassword(String password) {
-    if (password == widget.password) {
-      // Restore system UI
-      SystemChrome.setEnabledSystemUIMode(SystemUiMode.manual, overlays: SystemUiOverlay.values);
-      
-      // Notify Android about unlock
-      platform.invokeMethod('setLockState', {'locked': false});
-      
-      setState(() {
-        _isLocked = false;
-        _remainingMinutes = widget.hours * 60 + widget.minutes;
-        _updateRemainingTime();
-      });
-      Navigator.of(context).pop();
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Wrong password!'),
-          backgroundColor: Colors.red,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-    }
   }
 
   // Parent password dialog

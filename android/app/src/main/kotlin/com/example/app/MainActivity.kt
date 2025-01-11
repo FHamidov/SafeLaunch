@@ -119,15 +119,16 @@ class MainActivity: FlutterActivity() {
                 }
                 "setLockState" -> {
                     val locked = call.argument<Boolean>("locked") ?: false
-                    val blockNotifications = call.argument<Boolean>("blockNotifications") ?: false
                     isLocked = locked
+                    
                     if (isLocked) {
                         // Close all running apps and clear recent tasks when locked
                         closeAllRunningApps()
-                        if (blockNotifications) {
-                            // Enable stronger notification blocking
-                            enableStrongNotificationBlocking()
-                        }
+                        // Enable stronger notification blocking
+                        enableStrongNotificationBlocking()
+                    } else {
+                        // Remove all blocks when unlocked
+                        removeAllBlocks()
                     }
                     result.success(true)
                 }
@@ -332,6 +333,52 @@ class MainActivity: FlutterActivity() {
         }
     }
 
+    private fun removeAllBlocks() {
+        try {
+            // Clear window flags
+            val window = window
+            window.clearFlags(WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE)
+            window.clearFlags(WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE)
+            
+            // Clear activity lifecycle callbacks
+            application.unregisterActivityLifecycleCallbacks(activityLifecycleCallback)
+            
+            // Allow task switching
+            val am = getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+            am.appTasks.forEach { task ->
+                task.setExcludeFromRecents(false)
+            }
+            
+            // Reset window parameters
+            window.attributes = window.attributes.apply {
+                flags = flags and (
+                    WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
+                    WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+                ).inv()
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    private val activityLifecycleCallback = object : Application.ActivityLifecycleCallbacks {
+        override fun onActivityStarted(activity: Activity) {
+            if (isLocked && activity.javaClass != MainActivity::class.java) {
+                val intent = Intent(this@MainActivity, MainActivity::class.java)
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                startActivity(intent)
+                activity.finish()
+            }
+        }
+
+        override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) {}
+        override fun onActivityResumed(activity: Activity) {}
+        override fun onActivityPaused(activity: Activity) {}
+        override fun onActivityStopped(activity: Activity) {}
+        override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) {}
+        override fun onActivityDestroyed(activity: Activity) {}
+    }
+
     private fun enableStrongNotificationBlocking() {
         try {
             // Set as top activity
@@ -345,12 +392,8 @@ class MainActivity: FlutterActivity() {
                                  Intent.FLAG_ACTIVITY_CLEAR_TOP)
             startActivity(serviceIntent)
             
-            // Block task switching
-            if (Settings.canDrawOverlays(this)) {
-                val window = window
-                window.addFlags(WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
-                              WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE)
-            }
+            // Register activity lifecycle callbacks
+            application.registerActivityLifecycleCallbacks(activityLifecycleCallback)
         } catch (e: Exception) {
             e.printStackTrace()
         }
