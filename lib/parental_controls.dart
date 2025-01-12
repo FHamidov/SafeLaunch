@@ -67,9 +67,14 @@ class _ParentalControlsState extends State<ParentalControls> with SingleTickerPr
         final defaultHours = prefs.getInt('hours') ?? 0;
         final defaultMinutes = prefs.getInt('minutes') ?? 30;
         final totalMinutes = defaultHours * 60 + defaultMinutes;
+        
+        // Get current remaining time
+        final remainingMinutes = prefs.getInt('remainingMinutes') ?? totalMinutes;
 
-        // Reset remaining time to default limit
-        await prefs.setInt('remainingMinutes', totalMinutes);
+        // Only reset remaining time if it's 0
+        if (remainingMinutes <= 0) {
+          await prefs.setInt('remainingMinutes', totalMinutes);
+        }
 
         // Get saved values for launcher
         final password = prefs.getString('password') ?? '';
@@ -441,18 +446,12 @@ class _ParentalControlsState extends State<ParentalControls> with SingleTickerPr
                               // Calculate total minutes for new limit
                               int totalMinutes = selectedHours * 60 + selectedMinutes;
                               
-                              // Set remaining time equal to new limit
-                              await prefs.setInt('remainingMinutes', totalMinutes);
-                              
-                              // Notify launcher about time update
+                              // Notify launcher about time update if callback exists
                               if (widget.onTimeUpdated != null) {
                                 widget.onTimeUpdated!(totalMinutes);
                               }
                               
-                              // Pop the dialog first
-                              Navigator.pop(context);
-                              
-                              // Pop the parental controls screen
+                              // Pop the dialog
                               Navigator.pop(context);
                               
                               // Show success message
