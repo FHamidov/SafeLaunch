@@ -2,13 +2,18 @@ import 'package:flutter/material.dart';
 import 'dart:ui';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:safelaunch/launcher.dart';
+import 'package:safelaunch/models/app_data.dart';
 
 class ParentalControls extends StatefulWidget {
   final Function(int)? onTimeUpdated;
+  final List<AppData> currentAllApps;
+  final List<AppData> currentFavoriteApps;
 
   const ParentalControls({
     Key? key,
     this.onTimeUpdated,
+    required this.currentAllApps,
+    required this.currentFavoriteApps,
   }) : super(key: key);
 
   @override
@@ -55,117 +60,180 @@ class _ParentalControlsState extends State<ParentalControls> with SingleTickerPr
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      body: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              Color(0xFF1A237E),
-              Color(0xFF0D47A1),
-              Color(0xFF01579B),
-            ],
-            stops: [0.0, 0.5, 1.0],
+    return WillPopScope(
+      onWillPop: () async {
+        // Get default time limits
+        final prefs = await SharedPreferences.getInstance();
+        final defaultHours = prefs.getInt('hours') ?? 0;
+        final defaultMinutes = prefs.getInt('minutes') ?? 30;
+        final totalMinutes = defaultHours * 60 + defaultMinutes;
+
+        // Reset remaining time to default limit
+        await prefs.setInt('remainingMinutes', totalMinutes);
+
+        // Get saved values for launcher
+        final password = prefs.getString('password') ?? '';
+        final selectedAppPackages = prefs.getStringList('favAppsKey') ?? [];
+
+        // Navigate back to launcher with current apps
+        if (!mounted) return false;
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (context) => Launcher(
+              hours: defaultHours,
+              minutes: defaultMinutes,
+              password: password,
+              emergencyContact: null,
+              selectedAppPackages: selectedAppPackages,
+              preloadedAllApps: widget.currentAllApps,
+              preloadedFavoriteApps: widget.currentFavoriteApps,
+            ),
           ),
-        ),
-        child: SafeArea(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Animated Header
-              SlideTransition(
-                position: _slideAnimation,
-                child: FadeTransition(
-                  opacity: _fadeAnimation,
-                  child: Padding(
-                    padding: EdgeInsets.all(16),
-                    child: Row(
-                      children: [
-                        Hero(
-                          tag: 'back_button',
-                          child: Material(
-                            color: Colors.transparent,
-                            child: IconButton(
-                              icon: Icon(Icons.arrow_back_ios, color: Colors.white),
-                              onPressed: () {
-                                Navigator.pop(context);
-                              },
+        );
+
+        return false;
+      },
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        body: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                Color(0xFF1A237E),
+                Color(0xFF0D47A1),
+                Color(0xFF01579B),
+              ],
+              stops: [0.0, 0.5, 1.0],
+            ),
+          ),
+          child: SafeArea(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Animated Header
+                SlideTransition(
+                  position: _slideAnimation,
+                  child: FadeTransition(
+                    opacity: _fadeAnimation,
+                    child: Padding(
+                      padding: EdgeInsets.all(16),
+                      child: Row(
+                        children: [
+                          Hero(
+                            tag: 'back_button',
+                            child: Material(
+                              color: Colors.transparent,
+                              child: IconButton(
+                                icon: Icon(Icons.arrow_back_ios, color: Colors.white),
+                                onPressed: () async {
+                                  // Get default time limits
+                                  final prefs = await SharedPreferences.getInstance();
+                                  final defaultHours = prefs.getInt('hours') ?? 0;
+                                  final defaultMinutes = prefs.getInt('minutes') ?? 30;
+                                  final totalMinutes = defaultHours * 60 + defaultMinutes;
+
+                                  // Reset remaining time to default limit
+                                  await prefs.setInt('remainingMinutes', totalMinutes);
+
+                                  // Get saved values for launcher
+                                  final password = prefs.getString('password') ?? '';
+                                  final selectedAppPackages = prefs.getStringList('favAppsKey') ?? [];
+
+                                  // Navigate back to launcher with current apps
+                                  if (!mounted) return;
+                                  Navigator.pushReplacement(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) => Launcher(
+                                        hours: defaultHours,
+                                        minutes: defaultMinutes,
+                                        password: password,
+                                        emergencyContact: null,
+                                        selectedAppPackages: selectedAppPackages,
+                                        preloadedAllApps: widget.currentAllApps,
+                                        preloadedFavoriteApps: widget.currentFavoriteApps,
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
                             ),
                           ),
-                        ),
-                        Text(
-                          'Parental Controls',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 24,
-                            fontWeight: FontWeight.bold,
-                            shadows: [
-                              Shadow(
-                                blurRadius: 10,
-                                color: Colors.black26,
-                                offset: Offset(2, 2),
-                              ),
-                            ],
+                          Text(
+                            'Parental Controls',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 24,
+                              fontWeight: FontWeight.bold,
+                              shadows: [
+                                Shadow(
+                                  blurRadius: 10,
+                                  color: Colors.black26,
+                                  offset: Offset(2, 2),
+                                ),
+                              ],
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
                 ),
-              ),
-              
-              Expanded(
-                child: ListView.builder(
-                  padding: EdgeInsets.all(16),
-                  itemCount: 4,
-                  itemBuilder: (context, index) {
-                    final items = [
-                      {'title': 'Time Limits', 'icon': Icons.timer},
-                      {'title': 'Home Apps', 'icon': Icons.apps},
-                      {'title': 'Security', 'icon': Icons.security},
-                      {'title': 'Emergency Contact', 'icon': Icons.emergency},
-                    ];
-                    
-                    return AnimatedBuilder(
-                      animation: _controller,
-                      builder: (context, child) {
-                        final delay = index * 0.2;
-                        final slideAnimation = Tween<Offset>(
-                          begin: Offset(1, 0),
-                          end: Offset.zero,
-                        ).animate(CurvedAnimation(
-                          parent: _controller,
-                          curve: Interval(
-                            delay,
-                            delay + 0.4,
-                            curve: Curves.easeOut,
-                          ),
-                        ));
-
-                        final item = items[index];
-                        return SlideTransition(
-                          position: slideAnimation,
-                          child: Padding(
-                            padding: EdgeInsets.only(bottom: 16),
-                            child: _buildSettingsCard(
-                              title: item['title'] as String,
-                              icon: item['icon'] as IconData,
-                              onTap: () {
-                                if (item['title'] == 'Time Limits') {
-                                  _showTimeLimitDialog(context);
-                                }
-                              },
+                
+                Expanded(
+                  child: ListView.builder(
+                    padding: EdgeInsets.all(16),
+                    itemCount: 4,
+                    itemBuilder: (context, index) {
+                      final items = [
+                        {'title': 'Time Limits', 'icon': Icons.timer},
+                        {'title': 'Home Apps', 'icon': Icons.apps},
+                        {'title': 'Security', 'icon': Icons.security},
+                        {'title': 'Emergency Contact', 'icon': Icons.emergency},
+                      ];
+                      
+                      return AnimatedBuilder(
+                        animation: _controller,
+                        builder: (context, child) {
+                          final delay = index * 0.2;
+                          final slideAnimation = Tween<Offset>(
+                            begin: Offset(1, 0),
+                            end: Offset.zero,
+                          ).animate(CurvedAnimation(
+                            parent: _controller,
+                            curve: Interval(
+                              delay,
+                              delay + 0.4,
+                              curve: Curves.easeOut,
                             ),
-                          ),
-                        );
-                      },
-                    );
-                  },
+                          ));
+
+                          final item = items[index];
+                          return SlideTransition(
+                            position: slideAnimation,
+                            child: Padding(
+                              padding: EdgeInsets.only(bottom: 16),
+                              child: _buildSettingsCard(
+                                title: item['title'] as String,
+                                icon: item['icon'] as IconData,
+                                onTap: () {
+                                  if (item['title'] == 'Time Limits') {
+                                    _showTimeLimitDialog(context);
+                                  }
+                                },
+                              ),
+                            ),
+                          );
+                        },
+                      );
+                    },
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

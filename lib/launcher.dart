@@ -47,17 +47,28 @@ class _LockScreenState extends State<LockScreen> {
       // Notify Android about unlock
       platform.invokeMethod('setLockState', {'locked': false});
 
-      // Navigate back to launcher screen
+      // Navigate to ParentalControls screen
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(
-          builder: (context) => Launcher(
-            hours: widget.hours,
-            minutes: widget.minutes,
-            password: widget.password,
-            emergencyContact: widget.emergencyContact,
-            selectedAppPackages: widget.selectedAppPackages,
-            preloadedAllApps: widget.preloadedAllApps,
-            preloadedFavoriteApps: widget.preloadedFavoriteApps,
+          builder: (context) => ParentalControls(
+            onTimeUpdated: (int newMinutes) {
+              // Navigate back to launcher after time update
+              Navigator.of(context).pushReplacement(
+                MaterialPageRoute(
+                  builder: (context) => Launcher(
+                    hours: widget.hours,
+                    minutes: widget.minutes,
+                    password: widget.password,
+                    emergencyContact: widget.emergencyContact,
+                    selectedAppPackages: widget.selectedAppPackages,
+                    preloadedAllApps: widget.preloadedAllApps,
+                    preloadedFavoriteApps: widget.preloadedFavoriteApps,
+                  ),
+                ),
+              );
+            },
+            currentAllApps: widget.preloadedAllApps,
+            currentFavoriteApps: widget.preloadedFavoriteApps,
           ),
         ),
       );
@@ -388,8 +399,13 @@ class _LauncherState extends State<Launcher> with SingleTickerProviderStateMixin
   void initState() {
     super.initState();
     _allApps = widget.preloadedAllApps;
-    _allApps.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
     _favoriteApps = widget.preloadedFavoriteApps;
+    
+    // If apps are empty (coming from ParentalControls), load them
+    if (_allApps.isEmpty) {
+      _loadApps();
+    }
+    
     _groupAppsByLetter();
     
     // Initialize everything
@@ -505,44 +521,28 @@ class _LauncherState extends State<Launcher> with SingleTickerProviderStateMixin
   Future<void> _loadApps() async {
     try {
       final List<dynamic> result = await platform.invokeMethod('getInstalledApps');
-
+      
       if (!mounted) return;
 
-      final List<AppData> apps = result.map((app) {
-        final Map<String, dynamic> appMap = Map<String, dynamic>.from(app);
-        return AppData(
-          name: appMap['name'] as String,
-          packageName: appMap['packageName'] as String,
-          icon: appMap['icon'] as Uint8List,
-        );
-      }).toList();
-
-      apps.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
-
-      // Kaydedilmiş sıralamayı al
-      List<String> savedPackages = _prefs.getStringList(favAppsKey) ?? widget.selectedAppPackages;
-
-      // Kaydedilmiş sıralamaya göre favori uygulamaları düzenle
-      final List<AppData> selectedApps = [];
-      for (String packageName in savedPackages) {
-        final app = apps.firstWhere(
-          (app) => app.packageName == packageName,
-          orElse: () => apps.first,
-        );
-        selectedApps.add(app);
-      }
-
       setState(() {
-        _allApps = apps;
-        _favoriteApps = selectedApps;
+        _allApps = result.map((app) {
+          final Map<String, dynamic> appMap = Map<String, dynamic>.from(app);
+          return AppData(
+            name: appMap['name'] as String,
+            packageName: appMap['packageName'] as String,
+            icon: appMap['icon'] as Uint8List,
+          );
+        }).toList();
+
+        // Load favorite apps based on selectedAppPackages
+        _favoriteApps = _allApps.where((app) => 
+          widget.selectedAppPackages.contains(app.packageName)
+        ).toList();
+        
         _groupAppsByLetter();
       });
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to load apps')),
-        );
-      }
+      print('Error loading apps: $e');
     }
   }
 
@@ -1283,21 +1283,21 @@ class _LauncherState extends State<Launcher> with SingleTickerProviderStateMixin
     }
   }
 
-  void _lockScreen() {
+  Future<void> _lockScreen() async {
     setState(() {
       _isLocked = true;
     });
-    
-    if (!mounted) return;
-    
+
     // Set system UI flags to prevent access to system bars
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.manual, overlays: []);
     
     // Notify Android about lock state and enable notification blocking
-    platform.invokeMethod('setLockState', {
+    await platform.invokeMethod('setLockState', {
       'locked': true,
       'blockNotifications': true
     });
+
+    if (!mounted) return;
 
     // Start periodic check to ensure we stay in foreground
     Timer.periodic(Duration(milliseconds: 500), (timer) {
@@ -1309,17 +1309,34 @@ class _LauncherState extends State<Launcher> with SingleTickerProviderStateMixin
       platform.invokeMethod('bringToFront');
     });
 
+    // Show Times Up screen with animation
     Navigator.of(context).pushReplacement(
-      MaterialPageRoute(
-        builder: (context) => LockScreen(
+      PageRouteBuilder(
+        pageBuilder: (context, animation, secondaryAnimation) => LockScreen(
           password: widget.password,
           hours: widget.hours,
           minutes: widget.minutes,
           emergencyContact: widget.emergencyContact,
           selectedAppPackages: widget.selectedAppPackages,
-          preloadedAllApps: widget.preloadedAllApps,
-          preloadedFavoriteApps: widget.preloadedFavoriteApps,
+          preloadedAllApps: _allApps,
+          preloadedFavoriteApps: _favoriteApps,
         ),
+        transitionsBuilder: (context, animation, secondaryAnimation, child) {
+          return FadeTransition(
+            opacity: animation,
+            child: SlideTransition(
+              position: Tween<Offset>(
+                begin: const Offset(0, 0.1),
+                end: Offset.zero,
+              ).animate(CurvedAnimation(
+                parent: animation,
+                curve: Curves.easeOut,
+              )),
+              child: child,
+            ),
+          );
+        },
+        transitionDuration: const Duration(milliseconds: 500),
       ),
     );
   }
@@ -1469,8 +1486,11 @@ class _LauncherState extends State<Launcher> with SingleTickerProviderStateMixin
                                     onTimeUpdated: (int newMinutes) {
                                       setState(() {
                                         _remainingMinutes = newMinutes;
+                                        _isLocked = false;
                                       });
                                     },
+                                    currentAllApps: _allApps,
+                                    currentFavoriteApps: _favoriteApps,
                                   ),
                                 ),
                               );
@@ -1524,8 +1544,11 @@ class _LauncherState extends State<Launcher> with SingleTickerProviderStateMixin
                                       onTimeUpdated: (int newMinutes) {
                                         setState(() {
                                           _remainingMinutes = newMinutes;
+                                          _isLocked = false;
                                         });
                                       },
+                                      currentAllApps: _allApps,
+                                      currentFavoriteApps: _favoriteApps,
                                     ),
                                   ),
                                 );

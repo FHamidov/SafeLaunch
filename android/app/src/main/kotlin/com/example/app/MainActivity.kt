@@ -157,15 +157,26 @@ class MainActivity: FlutterActivity() {
             }
             
             // Clear recent tasks
-            am.appTasks.forEach { task ->
+            val recentTasks = am.appTasks
+            recentTasks.forEach { task ->
                 if (task.taskInfo.baseActivity?.packageName != packageName) {
                     task.finishAndRemoveTask()
+                }
+            }
+
+            // Force stop all background apps
+            val packages = packageManager.getInstalledPackages(0)
+            packages.forEach { packageInfo ->
+                if (packageInfo.packageName != packageName) {
+                    am.killBackgroundProcesses(packageInfo.packageName)
                 }
             }
             
             // Bring our app to front
             val intent = Intent(this, MainActivity::class.java)
-            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or 
+                           Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                           Intent.FLAG_ACTIVITY_SINGLE_TOP)
             startActivity(intent)
         } catch (e: Exception) {
             e.printStackTrace()
