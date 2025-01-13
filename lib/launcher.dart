@@ -591,7 +591,65 @@ class _LauncherState extends State<Launcher> with SingleTickerProviderStateMixin
 
   Future<void> _sendSOS() async {
     try {
-      if (widget.emergencyContact != null && widget.emergencyContact!.phones.isNotEmpty) {
+      // First check if we have permission
+      if (!await FlutterContacts.requestPermission()) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Kontaktlara icazə verilmədi'),
+            backgroundColor: Colors.red,
+            duration: Duration(seconds: 3),
+          ),
+        );
+        return;
+      }
+
+      // Check if we have emergency contact
+      if (widget.emergencyContact == null) {
+        // Try to load from SharedPreferences
+        final prefs = await SharedPreferences.getInstance();
+        final contactId = prefs.getString('emergencyContactId');
+        
+        if (contactId != null) {
+          final contact = await FlutterContacts.getContact(contactId);
+          if (contact != null && contact.phones.isNotEmpty) {
+            // Get location
+            Position position = await Geolocator.getCurrentPosition(
+              desiredAccuracy: LocationAccuracy.high,
+            );
+
+            final phoneNumber = contact.phones.first.number;
+            final locationMessage = 'Emergency! My location: https://www.google.com/maps?q=${position.latitude},${position.longitude}';
+
+            // Send SMS
+            final Uri smsUri = Uri(
+              scheme: 'sms',
+              path: phoneNumber,
+              queryParameters: {'body': locationMessage},
+            );
+            await launchUrl(smsUri);
+
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Təcili əlaqəyə məkan göndərilir'),
+                backgroundColor: Colors.green,
+                duration: Duration(seconds: 3),
+              ),
+            );
+            return;
+          }
+        }
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Təcili əlaqə tapılmadı. Zəhmət olmasa əvvəlcə təcili əlaqə əlavə edin.'),
+            backgroundColor: Colors.red,
+            duration: Duration(seconds: 3),
+          ),
+        );
+        return;
+      }
+
+      // If we have emergency contact from widget
+      if (widget.emergencyContact!.phones.isNotEmpty) {
         // Get location
         Position position = await Geolocator.getCurrentPosition(
           desiredAccuracy: LocationAccuracy.high,
@@ -608,10 +666,9 @@ class _LauncherState extends State<Launcher> with SingleTickerProviderStateMixin
         );
         await launchUrl(smsUri);
 
-        // Show notification
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Sending location to emergency contact'),
+            content: Text('Təcili əlaqəyə məkan göndərilir'),
             backgroundColor: Colors.green,
             duration: Duration(seconds: 3),
           ),
@@ -619,16 +676,17 @@ class _LauncherState extends State<Launcher> with SingleTickerProviderStateMixin
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('No emergency contact found'),
+            content: Text('Seçilmiş təcili əlaqənin telefon nömrəsi yoxdur'),
             backgroundColor: Colors.red,
             duration: Duration(seconds: 3),
           ),
         );
       }
     } catch (e) {
+      print('SOS error: $e');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Failed to send SOS'),
+          content: Text('SOS göndərilməsi zamanı xəta baş verdi: ${e.toString()}'),
           backgroundColor: Colors.red,
           duration: Duration(seconds: 3),
         ),

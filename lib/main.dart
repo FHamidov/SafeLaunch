@@ -6,6 +6,7 @@ import 'package:safelaunch/models/app_data.dart';
 import 'dart:typed_data';
 import 'dashboard.dart';
 import 'launcher.dart';
+import 'package:flutter_contacts/flutter_contacts.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -103,6 +104,15 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
       final String? password = prefs.getString('password');
       final int hours = prefs.getInt('hours') ?? 0;
       final int minutes = prefs.getInt('minutes') ?? 30;
+      
+      // Load emergency contact
+      final String? contactId = prefs.getString('emergencyContactId');
+      Contact? emergencyContact;
+      if (contactId != null) {
+        if (await FlutterContacts.requestPermission()) {
+          emergencyContact = await FlutterContacts.getContact(contactId);
+        }
+      }
       setState(() => _loadingProgress = 0.3);
 
       // Uygulamaları yükle
@@ -153,7 +163,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
                     hours: hours,
                     minutes: minutes,
                     password: password,
-                    emergencyContact: null,
+                    emergencyContact: emergencyContact,
                     selectedAppPackages: savedPackages,
                     preloadedAllApps: _allApps!,
                     preloadedFavoriteApps: _favoriteApps,

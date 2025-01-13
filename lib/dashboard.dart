@@ -1643,12 +1643,16 @@ class _DashboardState extends State<Dashboard> {
     selectedAppPackages = selectedApps.map((app) => app.packageName!).toList();
     await prefs.setStringList('favAppsKey', selectedAppPackages);
 
-    // Təcili əlaqə məlumatlarını saxla
+    // Save emergency contact with full details
     if (_selectedContact != null) {
-      await prefs.setString('emergencyContactId', _selectedContact!.id);
-      await prefs.setString('emergencyContactName', _selectedContact!.displayName);
-      if (_selectedContact!.phones.isNotEmpty) {
-        await prefs.setString('emergencyContactPhone', _selectedContact!.phones.first.number);
+      // Get full contact details before saving
+      final fullContact = await FlutterContacts.getContact(_selectedContact!.id, withProperties: true);
+      if (fullContact != null) {
+        await prefs.setString('emergencyContactId', fullContact.id);
+        await prefs.setString('emergencyContactName', fullContact.displayName);
+        if (fullContact.phones.isNotEmpty) {
+          await prefs.setString('emergencyContactPhone', fullContact.phones.first.number);
+        }
       }
     }
 
