@@ -82,7 +82,7 @@ class _LockScreenState extends State<LockScreen> {
             children: [
               Icon(Icons.error_outline, color: Colors.white),
               SizedBox(width: 8),
-              Text('Yanlış şifrə!'),
+              Text('Wrong password!'),
             ],
           ),
           backgroundColor: Colors.red,
@@ -1670,7 +1670,7 @@ class _LauncherState extends State<Launcher> with SingleTickerProviderStateMixin
                 SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    'Yanlış şifrə! Yenidən cəhd edin.',
+                    'Wrong password! Try again.',
                     style: TextStyle(
                       color: Colors.white,
                       fontSize: 14,
