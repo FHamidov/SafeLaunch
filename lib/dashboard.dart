@@ -108,7 +108,7 @@ class _DashboardState extends State<Dashboard> {
         }
       }
     } catch (e) {
-      print('Təcili əlaqə yüklənməsi zamanı xəta: $e');
+      print('Emergency contact loading error: $e');
     }
   }
 
@@ -1365,7 +1365,7 @@ class _DashboardState extends State<Dashboard> {
                       backgroundColor: Colors.white,
                       elevation: 0,
                       title: Text(
-                        'Təcili əlaqə seç',
+                        'Select Emergency Contact',
                         style: TextStyle(
                           fontSize: 20,
                           fontWeight: FontWeight.bold,
@@ -1722,23 +1722,23 @@ class _DashboardState extends State<Dashboard> {
       // Usage Stats icazəsi
       bool hasUsageStats = await platform.invokeMethod('checkUsageStatsPermission');
       if (!hasUsageStats) {
-        // Usage Stats icazəsi üçün dialoq göstər
+        // Show dialog for Usage Stats permission
         bool? shouldRequest = await showDialog<bool>(
           context: context,
           barrierDismissible: false,
           builder: (BuildContext context) {
             return AlertDialog(
-              title: Text('Usage Stats icazəsi'),
-              content: Text('Tətbiqin düzgün işləməsi üçün Usage Stats icazəsi lazımdır. '
-                  'Settings səhifəsi açılacaq, "SafeLaunch" tətbiqini tapıb icazə verin.'),
+              title: Text('Usage Stats Permission'),
+              content: Text('Usage Stats permission is required for the app to function properly. '
+                  'Settings page will open, find "SafeLaunch" app and grant permission.'),
               actions: [
                 TextButton(
                   onPressed: () => Navigator.of(context).pop(false),
-                  child: Text('Ləğv et'),
+                  child: Text('Cancel'),
                 ),
                 TextButton(
                   onPressed: () => Navigator.of(context).pop(true),
-                  child: Text('İcazə ver'),
+                  child: Text('Grant Permission'),
                 ),
               ],
             );
@@ -1747,9 +1747,9 @@ class _DashboardState extends State<Dashboard> {
 
         if (shouldRequest == true) {
           await platform.invokeMethod('requestUsageStatsPermission');
-          // İstifadəçiyə icazə verməsi üçün vaxt ver
+          // Give user time to grant permission
           await Future.delayed(Duration(seconds: 3));
-          // İcazəni yenidən yoxla
+          // Check permission again
           hasUsageStats = await platform.invokeMethod('checkUsageStatsPermission');
         }
       }
@@ -1757,23 +1757,23 @@ class _DashboardState extends State<Dashboard> {
       // System Alert Window icazəsi
       bool hasSystemAlert = await platform.invokeMethod('checkSystemAlertPermission');
       if (!hasSystemAlert) {
-        // System Alert icazəsi üçün dialoq göstər
+        // Show dialog for System Alert permission
         bool? shouldRequest = await showDialog<bool>(
           context: context,
           barrierDismissible: false,
           builder: (BuildContext context) {
             return AlertDialog(
-              title: Text('Digər tətbiqlər üzərində göstərmə icazəsi'),
-              content: Text('Tətbiqin düzgün işləməsi üçün digər tətbiqlər üzərində '
-                  'göstərmə icazəsi lazımdır. Settings səhifəsi açılacaq, icazəni aktiv edin.'),
+              title: Text('Display Over Other Apps Permission'),
+              content: Text('Permission to display over other apps is required for proper functionality. '
+                  'Settings page will open, please enable the permission.'),
               actions: [
                 TextButton(
                   onPressed: () => Navigator.of(context).pop(false),
-                  child: Text('Ləğv et'),
+                  child: Text('Cancel'),
                 ),
                 TextButton(
                   onPressed: () => Navigator.of(context).pop(true),
-                  child: Text('İcazə ver'),
+                  child: Text('Grant Permission'),
                 ),
               ],
             );
@@ -1782,14 +1782,14 @@ class _DashboardState extends State<Dashboard> {
 
         if (shouldRequest == true) {
           await platform.invokeMethod('requestSystemAlertPermission');
-          // İstifadəçiyə icazə verməsi üçün vaxt ver
+          // Give user time to grant permission
           await Future.delayed(Duration(seconds: 3));
-          // İcazəni yenidən yoxla
+          // Check permission again
           hasSystemAlert = await platform.invokeMethod('checkSystemAlertPermission');
         }
       }
 
-      // Bütün icazələri yoxla
+      // Check all permissions
       if (locationPermission == LocationPermission.denied || 
           locationPermission == LocationPermission.deniedForever) {
         allPermissionsGranted = false;
@@ -1822,32 +1822,32 @@ class _DashboardState extends State<Dashboard> {
           barrierDismissible: false,
           builder: (BuildContext context) {
             return AlertDialog(
-              title: Text('İcazələr tələb olunur'),
+              title: Text('Permissions Required'),
               content: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Tətbiqin düzgün işləməsi üçün aşağıdakı icazələr lazımdır:'),
+                  Text('The following permissions are required for the app to function properly:'),
                   SizedBox(height: 12),
                   Text(missingPermissions, style: TextStyle(fontWeight: FontWeight.bold)),
                   SizedBox(height: 12),
-                  Text('Hər bir icazə üçün ayrıca sorğu göndəriləcək.'),
+                  Text('Each permission will be requested separately.'),
                 ],
               ),
               actions: [
                 TextButton(
                   onPressed: () async {
                     Navigator.pop(context);
-                    // İcazələri yenidən yoxla
+                    // Check permissions again
                     _checkPermissions();
                   },
-                  child: Text('İcazələri yoxla'),
+                  child: Text('Check Permissions'),
                 ),
                 TextButton(
                   onPressed: () {
                     Navigator.pop(context);
                   },
-                  child: Text('Sonra'),
+                  child: Text('Later'),
                 ),
               ],
             );
@@ -1855,11 +1855,11 @@ class _DashboardState extends State<Dashboard> {
         );
       }
     } catch (e) {
-      print('İcazələrin yoxlanması zamanı xəta: $e');
+      print('Error checking permissions: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('İcazələrin yoxlanması zamanı xəta baş verdi'),
+            content: Text('Error occurred while checking permissions'),
             backgroundColor: Colors.red,
             duration: Duration(seconds: 3),
             action: SnackBarAction(
